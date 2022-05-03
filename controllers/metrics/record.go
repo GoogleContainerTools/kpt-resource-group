@@ -16,12 +16,24 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	"k8s.io/apimachinery/pkg/types"
+)
+
+const (
+	// NsReconcilerPrefix is the prefix used for all Namespace reconcilers.
+	NsReconcilerPrefix = "ns-reconciler"
+	// RootReconcilerPrefix is the prefix usef for all Root reconcilers.
+	RootReconcilerPrefix = "root-reconciler"
+	// RepoSyncName is the expected name of any RepoSync CR.
+	RepoSyncName = "repo-sync"
+	// RootSyncName is the expected name of any RootSync CR.
+	RootSyncName = "root-sync"
 )
 
 // RecordReconcileDuration produces a measurement for the ReconcileDuration view.
@@ -80,9 +92,9 @@ func RecordCRDCount(ctx context.Context, nn types.NamespacedName, count int64) {
 
 // RecordPipelineError produces a measurement for PipelineErrorView
 func RecordPipelineError(ctx context.Context, nn types.NamespacedName, component string, hasErr bool) {
-	reconcilerName := ComputeReconcilerName(nn)
+	reconcilerName, reconcilerType := ComputeReconcilerNameType(nn)
 	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyComponent, component), tag.Upsert(KeyName, reconcilerName),
-		tag.Upsert(KeyType, nn.Name))
+		tag.Upsert(KeyType, reconcilerType))
 	var metricVal int64
 	if hasErr {
 		metricVal = 1
@@ -95,13 +107,15 @@ func RecordPipelineError(ctx context.Context, nn types.NamespacedName, component
 }
 
 // ComputeReconcilerName computes the reconciler name from the ResourceGroup CR name
-// TODO: We weed to revisit and remove the Name checks when multiple rootsyncs|reposyncs are supported.
-func ComputeReconcilerName(nn types.NamespacedName) string {
-	if nn.Name == "root-sync" {
-		return "root-reconciler"
+func ComputeReconcilerNameType(nn types.NamespacedName) (reconcilerName, reconcilerType string) {
+	if nn.Namespace == "config-management-system" {
+		if nn.Name == RootSyncName {
+			return RootReconcilerPrefix, RootSyncName
+		}
+		return fmt.Sprintf("%s-%s", RootReconcilerPrefix, nn.Name), RootSyncName
 	}
-	if nn.Name == "repo-sync" {
-		return "ns-reconciler-" + nn.Namespace
+	if nn.Name == RepoSyncName {
+		return fmt.Sprintf("%s-%s", NsReconcilerPrefix, namespace), RepoSyncName
 	}
-	return nn.Name
+	return fmt.Sprintf("%s-%s-%s-%d", NsReconcilerPrefix, namespace, nn.Name, len(nn.Name)), RepoSyncName
 }
