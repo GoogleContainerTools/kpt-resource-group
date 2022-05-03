@@ -1,0 +1,8 @@
+domain: "gke.io"
+multigroup: true
+repo: gke-internal.googlesource.com/GoogleCloudPlatform/resource-group
+resources:
+- group: kpt.dev
+  kind: ResourceGroup
+  version: v1alpha1
+version: "2"
