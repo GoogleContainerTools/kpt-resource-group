@@ -409,6 +409,14 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 					Kind:  "ConfigMap",
 				},
 			},
+			{
+				Name:      "test-status-6",
+				Namespace: testNamespace,
+				GroupKind: v1alpha1.GroupKind{
+					Group: "",
+					Kind:  "ConfigMap",
+				},
+			},
 		}
 		// Apply all but the last CM resource to test NotFound error.
 		applyResources(kubeClient, resources[:len(resources)-1], rgname)
@@ -444,6 +452,11 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 			},
 			{
 				ObjMetadata: resources[5],
+				Status:      v1alpha1.Current,
+				SourceHash:  "1234567",
+			},
+			{
+				ObjMetadata: resources[6],
 				Status:      v1alpha1.NotFound,
 				SourceHash:  "1234567",
 			},
@@ -489,8 +502,15 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 				Status:      v1alpha1.InProgress,
 			},
 			{
-				// CM should not exist on live cluster.
 				ObjMetadata: resources[5],
+				Strategy:    v1alpha1.Apply,
+				Actuation:   v1alpha1.ActuationSucceeded,
+				Reconcile:   v1alpha1.ReconcileSucceeded,
+				Status:      v1alpha1.Unknown,
+			},
+			{
+				// CM should not exist on the live cluster.
+				ObjMetadata: resources[6],
 			},
 		}
 
@@ -525,6 +545,11 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 			},
 			{
 				ObjMetadata: resources[5],
+				Status:      v1alpha1.Current,
+				SourceHash:  "1234567",
+			},
+			{
+				ObjMetadata: resources[6],
 				Status:      v1alpha1.NotFound,
 				SourceHash:  "1234567",
 			},

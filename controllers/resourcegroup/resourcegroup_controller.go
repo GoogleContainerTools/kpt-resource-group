@@ -319,6 +319,9 @@ func ActuationStatusToLegacy(s v1alpha1.ResourceStatus) v1alpha1.Status {
 		return v1alpha1.Unknown
 	}
 
+	if s.Actuation == v1alpha1.ActuationSucceeded && s.Reconcile == v1alpha1.ReconcileSucceeded {
+		return v1alpha1.Current
+	}
 	return s.Status
 }
 

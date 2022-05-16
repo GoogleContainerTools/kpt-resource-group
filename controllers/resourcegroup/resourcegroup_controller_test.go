@@ -21,13 +21,13 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
-	"kpt.dev/resourcegroup/controllers/resourcemap"
-	"kpt.dev/resourcegroup/controllers/typeresolver"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
+	"kpt.dev/resourcegroup/controllers/resourcemap"
+	"kpt.dev/resourcegroup/controllers/typeresolver"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -433,6 +433,15 @@ func TestActuationStatusToLegacy(t *testing.T) {
 				Actuation: v1alpha1.ActuationSucceeded,
 			},
 			v1alpha1.NotFound,
+		},
+		{
+			"Return Current if both Actuation and Reconcile succeeded",
+			v1alpha1.ResourceStatus{
+				Status:    v1alpha1.Unknown,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Reconcile: v1alpha1.ReconcileSucceeded,
+			},
+			v1alpha1.Current,
 		},
 	}
 	for _, tc := range tests {
