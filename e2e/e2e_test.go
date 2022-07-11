@@ -42,6 +42,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"kpt.dev/resourcegroup/controllers/resourcegroup"
@@ -217,15 +218,105 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("Test ResourceGroup controller in kpt group", func() {
-		By("Apply the v1beta1 CRD for ResourceGroup ")
-		err := RunMake("apply-v1beta1-crd")
-		Expect(err).NotTo(HaveOccurred(), "failed to apply v1beta1 ResourceGroup CRD: %v", err)
-
-		config, err = clientConfig()
+	It("Test ResourceGroup controller with CRD v1beta1", func() {
+		config, err := clientConfig()
 		Expect(err).NotTo(HaveOccurred())
 		kubeClient, err = newKubeClient(config)
 		Expect(err).NotTo(HaveOccurred())
+
+		// Lookup CRD versions supported by the server
+		mapper, err := apiutil.NewDynamicRESTMapper(config)
+		Expect(err).NotTo(HaveOccurred())
+		mappings, err := mapper.RESTMappings(schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"})
+		Expect(err).NotTo(HaveOccurred())
+		versions := make(map[string]struct{}, len(mappings))
+		for _, mapping := range mappings {
+			versions[mapping.GroupVersionKind.Version] = struct{}{}
+		}
+		if _, ok := versions["v1beta1"]; !ok {
+			Skip("Server does not support apiextensions.k8s.io/v1beta1")
+		}
+
+		By("Apply the v1beta1 CRD for ResourceGroup")
+		err = RunMake("apply-v1beta1-crd")
+		Expect(err).NotTo(HaveOccurred(), "failed to apply v1beta1 ResourceGroup CRD: %v", err)
+
+		By("Wait for the CRD to be ready")
+		err = waitForCRD(kubeClient, "resourcegroups.kpt.dev")
+		Expect(err).NotTo(HaveOccurred(), "v1beta1 CRD is not ready")
+
+		By("Apply a ResourceGroup CR")
+		rgname := "crd-version"
+		rg := newKptResourceGroup(kubeClient, rgname, rgname)
+
+		By("We can get the applied ResourceGroup CR")
+		clusterRG := rg.DeepCopy()
+		err = kubeClient.Get(context.TODO(), client.ObjectKey{Name: rg.Name, Namespace: rg.Namespace}, clusterRG)
+		Expect(err).NotTo(HaveOccurred(), "failed to get RG")
+	})
+
+	It("Test ResourceGroup controller with CRD v1", func() {
+		config, err := clientConfig()
+		Expect(err).NotTo(HaveOccurred())
+		kubeClient, err = newKubeClient(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Lookup CRD versions supported by the server
+		mapper, err := apiutil.NewDynamicRESTMapper(config)
+		Expect(err).NotTo(HaveOccurred())
+		mappings, err := mapper.RESTMappings(schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"})
+		Expect(err).NotTo(HaveOccurred())
+		versions := make(map[string]struct{}, len(mappings))
+		for _, mapping := range mappings {
+			versions[mapping.GroupVersionKind.Version] = struct{}{}
+		}
+		if _, ok := versions["v1"]; !ok {
+			Fail("Server does not support apiextensions.k8s.io/v1")
+		}
+
+		By("Apply the v1 CRD for ResourceGroup")
+		err = RunMake("apply-v1-crd")
+		Expect(err).NotTo(HaveOccurred(), "failed to apply v1 ResourceGroup CRD: %v", err)
+
+		By("Wait for the v1 CRD to be ready")
+		err = waitForCRD(kubeClient, "resourcegroups.kpt.dev")
+		Expect(err).NotTo(HaveOccurred(), "v1 CRD is not ready")
+
+		By("Apply a ResourceGroup CR")
+		rgname := "crd-version"
+		rg := newKptResourceGroup(kubeClient, rgname, rgname)
+
+		By("We can get the applied ResourceGroup CR")
+		clusterRG := rg.DeepCopy()
+		err = kubeClient.Get(context.TODO(), client.ObjectKey{Name: rg.Name, Namespace: rg.Namespace}, clusterRG)
+		Expect(err).NotTo(HaveOccurred(), "failed to get RG")
+	})
+
+	It("Test ResourceGroup upgrade from CRD v1beta1 to v1", func() {
+		config, err := clientConfig()
+		Expect(err).NotTo(HaveOccurred())
+		kubeClient, err = newKubeClient(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Lookup CRD versions supported by the server
+		mapper, err := apiutil.NewDynamicRESTMapper(config)
+		Expect(err).NotTo(HaveOccurred())
+		mappings, err := mapper.RESTMappings(schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"})
+		Expect(err).NotTo(HaveOccurred())
+		versions := make(map[string]struct{}, len(mappings))
+		for _, mapping := range mappings {
+			versions[mapping.GroupVersionKind.Version] = struct{}{}
+		}
+		if _, ok := versions["v1"]; !ok {
+			Fail("Server does not support apiextensions.k8s.io/v1")
+		}
+		if _, ok := versions["v1beta1"]; !ok {
+			Skip("Server does not support apiextensions.k8s.io/v1beta1")
+		}
+
+		By("Apply the v1beta1 CRD for ResourceGroup")
+		err = RunMake("apply-v1beta1-crd")
+		Expect(err).NotTo(HaveOccurred(), "failed to apply v1beta1 ResourceGroup CRD: %v", err)
 
 		By("Wait for the CRD to be ready")
 		err = waitForCRD(kubeClient, "resourcegroups.kpt.dev")
@@ -927,6 +1018,19 @@ func waitForDeployment(clientSet *kubernetes.Clientset, namespace, name string) 
 		}
 		return d.Status.Replicas == d.Status.AvailableReplicas &&
 			d.Status.Replicas == d.Status.ReadyReplicas, nil
+	})
+}
+
+func waitForNamespace(clientSet *kubernetes.Clientset, name string) error {
+	return wait.PollImmediate(pollInterval, waitTimeout, func() (bool, error) {
+		d, err := clientSet.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil && kubeerrors.IsNotFound(err) {
+			return false, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("failed to get namespace %s: %v", name, err)
+		}
+		return d.Status.Phase == corev1.NamespaceActive, nil
 	})
 }
 

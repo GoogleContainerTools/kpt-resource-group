@@ -56,6 +56,7 @@ if [[ "$count" -eq 0 ]]; then
   kubectl create clusterrolebinding authenticated-admin --clusterrole cluster-admin --user $(gcloud config get-value account)
 fi
 
-make deploy
+make undeploy undeploy-otel-collector uninstall # cleanup from previous failed test runs
+make install deploy-otel-collector deploy
 make e2e-test
-make undeploy
+make undeploy undeploy-otel-collector uninstall

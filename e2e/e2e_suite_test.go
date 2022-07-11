@@ -69,6 +69,13 @@ var _ = BeforeSuite(func() {
 		},
 	}, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
+
+	By("Wait for test namespace to be ready")
+	err = waitForNamespace(clientSet, testNamespace)
+	if err != nil {
+		dumpEvents(clientSet, testNamespace)
+	}
+	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {

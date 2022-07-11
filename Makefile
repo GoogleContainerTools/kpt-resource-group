@@ -38,7 +38,7 @@ install: manifests
 
 # Uninstall CRDs from a cluster
 uninstall: manifests
-	kustomize build config/crd | kubectl delete -f -
+	kustomize build config/crd | kubectl delete --ignore-not-found -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
@@ -53,7 +53,12 @@ deploy-otel-collector:
 # UnDeploy controller in the configured Kubernetes cluster in ~/.kube/config
 undeploy: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}
-	kustomize build config/default | kubectl delete -f -
+	kustomize build config/default | kubectl delete --ignore-not-found -f -
+
+# UnDeploy otel-collector in the configured Kubernetes cluster in ~/.kube/config
+undeploy-otel-collector:
+	kustomize build config/otel-collector | kubectl delete --ignore-not-found -f -
+	kubectl delete namespace config-management-monitoring --ignore-not-found
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
@@ -131,4 +136,4 @@ apply-v1beta1-crd:
 	kubectl apply -f config/crd/v1beta1/kpt.dev_resourcegroups_v1beta1.yaml
 
 delete-crd:
-	kubectl delete -f config/crd/bases/kpt.dev_resourcegroups.yaml
+	kubectl delete --ignore-not-found -f config/crd/bases/kpt.dev_resourcegroups.yaml
