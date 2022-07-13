@@ -17,16 +17,15 @@ package handler
 import (
 	"time"
 
-	"github.com/go-logr/glogr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-
+	"k8s.io/klog/v2/klogr"
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"kpt.dev/resourcegroup/controllers/resourcemap"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
 type fakeMapping struct{}
@@ -62,7 +61,6 @@ func (m fakeMapping) GetResources(_ schema.GroupKind) []v1alpha1.ObjMetadata {
 }
 
 func (m fakeMapping) SetStatus(_ v1alpha1.ObjMetadata, _ *resourcemap.CachedStatus) {
-	return
 }
 
 var _ = Describe("Util tests", func() {
@@ -72,7 +70,7 @@ var _ = Describe("Util tests", func() {
 			h := EnqueueEventToChannel{
 				Mapping: fakeMapping{},
 				Channel: ch,
-				Log:     glogr.New(),
+				Log:     klogr.New(),
 			}
 			u := &unstructured.Unstructured{}
 
@@ -95,13 +93,13 @@ var _ = Describe("Util tests", func() {
 			h1 := EnqueueEventToChannel{
 				Mapping: fakeMapping{},
 				Channel: ch,
-				Log:     glogr.New(),
+				Log:     klogr.New(),
 			}
 
 			h2 := EnqueueEventToChannel{
 				Mapping: fakeMapping{},
 				Channel: ch,
-				Log:     glogr.New(),
+				Log:     klogr.New(),
 				GVK:     schema.GroupVersionKind{Kind: "MyKind"},
 			}
 

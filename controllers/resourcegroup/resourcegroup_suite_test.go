@@ -19,18 +19,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/go-logr/glogr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
+	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
+	"kpt.dev/resourcegroup/controllers/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-
-	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -42,13 +41,14 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 
 func TestResourceGroup(t *testing.T) {
+	log.InitFlags()
+	klog.SetOutput(GinkgoWriter)
 	RegisterFailHandler(Fail)
-
 	RunSpecs(t, "ResourceGroup Suite")
 }
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(glogr.New())
+	//logf.SetLogger(klog.New())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{

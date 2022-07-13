@@ -22,7 +22,7 @@ import (
 	// Empty import as required by pprof
 	_ "net/http/pprof"
 
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 var enableProfiler = flag.Bool("enable-pprof", false, "enable pprof profiling")
@@ -32,11 +32,11 @@ var profilerPort = flag.Int("pprof-port", 6060, "port for pprof profiling. defau
 func Service() {
 	if *enableProfiler {
 		go func() {
-			glog.Infof("Starting profiling on port %d", *profilerPort)
+			klog.Infof("Starting profiling on port %d", *profilerPort)
 			addr := fmt.Sprintf(":%d", *profilerPort)
 			err := http.ListenAndServe(addr, nil)
 			if err != nil {
-				glog.Fatalf("Profiler server failed to start: %+v", err)
+				klog.Fatalf("Profiler server failed to start: %+v", err)
 			}
 		}()
 	}

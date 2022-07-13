@@ -23,12 +23,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8sevent "sigs.k8s.io/controller-runtime/pkg/event"
 
@@ -111,10 +111,10 @@ func (w *filteredWatcher) pruneErrors() {
 
 // addError checks whether an error identified by the errorID has been tracked,
 // and handles it in one of the following ways:
-//   * tracks it if it has not yet been tracked;
-//   * updates the time for this error to time.Now() if `errorLoggingInterval` has passed
+//   - tracks it if it has not yet been tracked;
+//   - updates the time for this error to time.Now() if `errorLoggingInterval` has passed
 //     since the same error happened last time;
-//   * ignore the error if `errorLoggingInterval` has NOT passed since it happened last time.
+//   - ignore the error if `errorLoggingInterval` has NOT passed since it happened last time.
 //
 // addError returns false if the error is ignored, and true if it is not ignored.
 func (w *filteredWatcher) addError(errorID string) bool {
@@ -150,7 +150,7 @@ func waitUntilNextRetry(retries int) {
 // filters the event and pushes the object contained
 // in the event to the controller work queue.
 func (w *filteredWatcher) Run(ctx context.Context) error {
-	glog.Infof("Watch started for %s", w.gvk)
+	klog.Infof("Watch started for %s", w.gvk)
 	var resourceVersion string
 	var retriesForWatchError int
 
@@ -169,7 +169,7 @@ func (w *filteredWatcher) Run(ctx context.Context) error {
 
 		eventCount := 0
 		ignoredEventCount := 0
-		glog.Infof("(Re)starting watch for %s at resource version %q", w.gvk, resourceVersion)
+		klog.Infof("(Re)starting watch for %s at resource version %q", w.gvk, resourceVersion)
 		for event := range w.base.ResultChan() {
 			w.pruneErrors()
 			newVersion, ignoreEvent, err := w.handle(event)
@@ -179,14 +179,14 @@ func (w *filteredWatcher) Run(ctx context.Context) error {
 			}
 			if err != nil {
 				if cache.IsExpiredError(err) {
-					glog.Infof("Watch for %s at resource version %q closed with: %v", w.gvk, resourceVersion, err)
+					klog.Infof("Watch for %s at resource version %q closed with: %v", w.gvk, resourceVersion, err)
 					// `w.handle` may fail because we try to watch an old resource version, setting
 					// a watch on an old resource version will always fail.
 					// Reset `resourceVersion` to an empty string here so that we can start a new
 					// watch at the most recent resource version.
 					resourceVersion = ""
 				} else if w.addError(watchEventErrorType + errorID(err)) {
-					glog.Errorf("Watch for %s at resource version %q ended with: %v", w.gvk, resourceVersion, err)
+					klog.Errorf("Watch for %s at resource version %q ended with: %v", w.gvk, resourceVersion, err)
 				}
 				retriesForWatchError++
 				waitUntilNextRetry(retriesForWatchError)
@@ -198,10 +198,10 @@ func (w *filteredWatcher) Run(ctx context.Context) error {
 				resourceVersion = newVersion
 			}
 		}
-		glog.Infof("Ending watch for %s at resource version %q (total events: %d, ignored events: %d)",
+		klog.Infof("Ending watch for %s at resource version %q (total events: %d, ignored events: %d)",
 			w.gvk, resourceVersion, eventCount, ignoredEventCount)
 	}
-	glog.Infof("Watch stopped for %s", w.gvk)
+	klog.Infof("Watch stopped for %s", w.gvk)
 	return nil
 }
 
@@ -275,7 +275,7 @@ func (w *filteredWatcher) handle(event watch.Event) (string, bool, error) {
 			// For watch.Bookmark, only the ResourceVersion field of event.Object is set.
 			// Therefore, set the second argument of w.addError to watchEventBookmarkType.
 			if w.addError(watchEventBookmarkType) {
-				glog.Errorf("Unable to access metadata of Bookmark event: %v", event)
+				klog.Errorf("Unable to access metadata of Bookmark event: %v", event)
 			}
 			return "", false, nil
 		}
@@ -285,7 +285,7 @@ func (w *filteredWatcher) handle(event watch.Event) (string, bool, error) {
 	// Keep the default case to catch any new watch event types added in the future.
 	default:
 		if w.addError(watchEventUnsupportedType) {
-			glog.Errorf("Unsupported watch event: %#v", event)
+			klog.Errorf("Unsupported watch event: %#v", event)
 		}
 		return "", false, nil
 	}
@@ -293,24 +293,24 @@ func (w *filteredWatcher) handle(event watch.Event) (string, bool, error) {
 	// get client.Object from the runtime object.
 	object, ok := event.Object.(*unstructured.Unstructured)
 	if !ok {
-		glog.Infof("Received non unstructured object in watch event: %T", object)
+		klog.Infof("Received non unstructured object in watch event: %T", object)
 		return "", false, nil
 	}
 	// filter objects.
 	id := getID(object)
 	if !w.shouldProcess(object) {
-		glog.V(4).Infof("Ignoring event for object: %v", id)
+		klog.V(4).Infof("Ignoring event for object: %v", id)
 		return object.GetResourceVersion(), true, nil
 	}
 
 	if deleted {
-		glog.Infof("updating the reconciliation status: %v: %v", id, v1alpha1.NotFound)
+		klog.Infof("updating the reconciliation status: %v: %v", id, v1alpha1.NotFound)
 		w.resources.SetStatus(id, &resourcemap.CachedStatus{Status: v1alpha1.NotFound})
 	} else {
-		glog.Infof("Received watch event for created/updated object %q", id)
+		klog.Infof("Received watch event for created/updated object %q", id)
 		resStatus := status.ComputeStatus(object)
 		if resStatus != nil {
-			glog.Infof("updating the reconciliation status: %v: %v", id, resStatus.Status)
+			klog.Infof("updating the reconciliation status: %v: %v", id, resStatus.Status)
 			w.resources.SetStatus(id, resStatus)
 		}
 	}
@@ -320,7 +320,7 @@ func (w *filteredWatcher) handle(event watch.Event) (string, bool, error) {
 		resgroup.SetNamespace(r.Namespace)
 		resgroup.SetName(r.Name)
 
-		glog.Infof("sending a generic event from watcher for %v", resgroup.GetObjectMeta())
+		klog.Infof("sending a generic event from watcher for %v", resgroup.GetObjectMeta())
 		w.channel <- k8sevent.GenericEvent{Object: resgroup}
 	}
 
@@ -331,7 +331,7 @@ func (w *filteredWatcher) handle(event watch.Event) (string, bool, error) {
 // watcher for processing.
 func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 	if w.resources == nil {
-		glog.V(4).Infof("The resources are empty")
+		klog.V(4).Infof("The resources are empty")
 	}
 	id := getID(object)
 	return w.resources.HasResource(id)

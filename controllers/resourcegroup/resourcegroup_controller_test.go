@@ -35,6 +35,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
+const contextResourceGroupControllerKey = contextKey("resourcegroup-controller")
+
 var c client.Client
 var ctx context.Context
 
@@ -48,8 +50,8 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		c = mgr.GetClient()
 
-		logger := ctrl.Log.WithName("controllers").WithName("ResourceGroup")
-		ctx = context.WithValue(context.TODO(), "resourcegroup-controller", logger)
+		logger := ctrl.Log.WithName("controllers").WithName(v1alpha1.ResourceGroupKind)
+		ctx = context.WithValue(context.TODO(), contextResourceGroupControllerKey, logger)
 
 		// Setup the controller
 		channelKpt = make(chan event.GenericEvent)
@@ -110,8 +112,8 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 			expectedStatus := v1alpha1.ResourceGroupStatus{
 				ObservedGeneration: 1,
 				Conditions: []v1alpha1.Condition{
-					newReconcilingCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg),
-					newStalledCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg),
+					newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+					newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
 				},
 			}
 			verifyClusterResourceGroup(updatedResgroupKpt, 1, 0, expectedStatus)
@@ -160,8 +162,8 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 					},
 				},
 				Conditions: []v1alpha1.Condition{
-					newReconcilingCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg),
-					newStalledCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg),
+					newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+					newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
 				},
 			}
 			verifyClusterResourceGroup(updatedResgroupKpt, 2, 2, expectedStatus)
@@ -239,8 +241,8 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 					},
 				},
 				Conditions: []v1alpha1.Condition{
-					newReconcilingCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg),
-					newStalledCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg),
+					newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+					newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
 				},
 			}
 			verifyClusterResourceGroup(updatedResgroupKpt, 2, 2, expectedStatus)
@@ -275,8 +277,8 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 					},
 				},
 				Conditions: []v1alpha1.Condition{
-					newReconcilingCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg),
-					newStalledCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg),
+					newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+					newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
 				},
 			}
 			verifyClusterResourceGroup(updatedResgroupKpt, 3, 1, expectedStatus)
@@ -347,14 +349,14 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 			cond := aggregateResourceStatuses([]v1alpha1.ResourceStatus{currentStatus, failedStatus1})
 			Expect(cond.Type).Should(Equal(v1alpha1.Stalled))
 			Expect(cond.Status).Should(Equal(v1alpha1.TrueConditionStatus))
-			Expect(cond.Reason).Should(Equal("ComponentFailed"))
+			Expect(cond.Reason).Should(Equal(ComponentFailed))
 			Expect(cond.Message).Should(Equal(componentFailedMsgPrefix + "group1/kind1/ns1/name1"))
 		})
 		It("should return a True Stalled condition with two failed components", func() {
 			cond := aggregateResourceStatuses([]v1alpha1.ResourceStatus{currentStatus, failedStatus1, failedStatus2})
 			Expect(cond.Type).Should(Equal(v1alpha1.Stalled))
 			Expect(cond.Status).Should(Equal(v1alpha1.TrueConditionStatus))
-			Expect(cond.Reason).Should(Equal("ComponentFailed"))
+			Expect(cond.Reason).Should(Equal(ComponentFailed))
 			Expect(cond.Message).Should(Equal(componentFailedMsgPrefix +
 				"group1/kind1/ns1/name1, group2/kind2/ns2/name2"))
 		})
@@ -363,7 +365,7 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 				inProgressStatus, unknownStatus, terminatingStatus})
 			Expect(cond.Type).Should(Equal(v1alpha1.Stalled))
 			Expect(cond.Status).Should(Equal(v1alpha1.FalseConditionStatus))
-			Expect(cond.Reason).Should(Equal("FinishReconciling"))
+			Expect(cond.Reason).Should(Equal(FinishReconciling))
 			Expect(cond.Message).Should(Equal("finish reconciling"))
 		})
 	})

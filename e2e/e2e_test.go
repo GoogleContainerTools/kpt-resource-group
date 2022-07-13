@@ -20,44 +20,35 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"sigs.k8s.io/cli-utils/pkg/common"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"kpt.dev/resourcegroup/controllers/resourcegroup"
 	"kpt.dev/resourcegroup/controllers/root"
+	"sigs.k8s.io/cli-utils/pkg/common"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	testNamespace = "resourcegroup-e2e"
-	pollInterval  = 10 * time.Second
+	pollInterval  = 1 * time.Second
 	waitTimeout   = 160 * time.Second
-)
-
-var (
-	config    *rest.Config
-	clientSet *kubernetes.Clientset
 )
 
 var _ = Describe("ResourceGroup Controller e2e test", func() {
@@ -69,8 +60,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		By("The status of the resourcegroup should be empty")
 		expectedStatus := initResourceStatus()
 		expectedStatus.ObservedGeneration = 1
-		err := waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Updating resources")
 		resources := []v1alpha1.ObjMetadata{
@@ -83,7 +73,8 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 				},
 			},
 		}
-		_ = updateResourceGroupSpec(kubeClient, rgname, root.KptGroup, resources)
+		err := patchResources(kubeClient, rgname, resources)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating another resourcegroup and adding it as a subgroup")
 		subGroupName := "group-b"
@@ -96,14 +87,15 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 				Namespace: rg.Namespace,
 			},
 		}
-		updateResourceGroupSubGroup(kubeClient, rgname, root.KptGroup, subgroups)
+		err = patchSubgroups(kubeClient, rgname, subgroups)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Updating resourcegroup")
 		expectedStatus.ObservedGeneration = 3
 		expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 			{
 				ObjMetadata: resources[0],
-				Status:      "NotFound",
+				Status:      v1alpha1.NotFound,
 			},
 		}
 		expectedStatus.SubgroupStatuses = []v1alpha1.GroupStatus{
@@ -112,12 +104,19 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 					Namespace: rg.Namespace,
 					Name:      rg.Name,
 				},
-				Status: "Current",
+				Status: v1alpha1.Current,
+				Conditions: []v1alpha1.Condition{
+					{
+						Type:    v1alpha1.Ownership,
+						Status:  v1alpha1.UnknownConditionStatus,
+						Reason:  v1alpha1.OwnershipEmpty,
+						Message: "This object is not owned by any inventory object.",
+					},
+				},
 			},
 		}
 
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Creating resources")
 		applyResources(kubeClient, resources, rgname)
@@ -126,34 +125,33 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 			{
 				ObjMetadata: resources[0],
-				Status:      "Current",
+				Status:      v1alpha1.Current,
 				SourceHash:  "1234567",
 			},
 		}
 
 		By("The status should contain the resources")
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Update resources with a different owning-inventory")
 		applyResources(kubeClient, resources, "another")
 		expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 			{
 				ObjMetadata: resources[0],
-				Status:      "Current",
+				Status:      v1alpha1.Current,
 				SourceHash:  "1234567",
 				Conditions: []v1alpha1.Condition{
 					{
-						Message: "This resource is owned by another ResourceGroup another. The status only reflects the specification for the current object in ResourceGroup another.",
 						Type:    v1alpha1.Ownership,
-						Status:  "True",
+						Status:  v1alpha1.TrueConditionStatus,
+						Reason:  v1alpha1.OwnershipUnmatch,
+						Message: "This resource is owned by another ResourceGroup another.",
 					},
 				},
 			},
 		}
 
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Delete resource group")
 		deleteResourceGroup(kubeClient, rgname, root.KptGroup)
@@ -172,43 +170,44 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 
 		By("Updating resources")
 		resources := makeNConfigMaps(1000)
-		updateResourceGroupSpec(kubeClient, rgname, root.KptGroup, resources)
+		err := patchResources(kubeClient, rgname, resources)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Updating resourcegroup")
 		expectedStatus := initResourceStatus()
 		expectedStatus.ObservedGeneration = 2
-		expectedStatus.ResourceStatuses = makeStatusForNConfigMap(1000, "NotFound")
+		expectedStatus.ResourceStatuses = makeStatusForNConfigMap(1000, v1alpha1.NotFound)
 
-		err := waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Creating resources")
 		createResources(kubeClient, resources)
 
 		By("The status should contain the resources")
 		expectedStatus.ObservedGeneration = 2
-		expectedStatus.ResourceStatuses = makeStatusForNConfigMap(1000, "Current")
+		expectedStatus.ResourceStatuses = makeStatusForNConfigMap(1000, v1alpha1.Current)
 
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Randomly delete one ConfigMap from 1000 ConfigMaps")
 		index := rand.Intn(1000)
 		deleteResources(kubeClient, []v1alpha1.ObjMetadata{resources[index-1]})
-		expectedStatus.ResourceStatuses[index-1].Status = "NotFound"
+		expectedStatus.ResourceStatuses[index-1].Status = v1alpha1.NotFound
 
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Disable status of the resourcegroup")
-		addStatusDisabledAnnotation(kubeClient, rgname)
+		err = patchStatusDisabled(kubeClient, rgname)
+		Expect(err).NotTo(HaveOccurred())
+
 		// update the resources list since adding annotation doesn't trigger
 		// a reconcile
 		resources = resources[1:]
-		updateResourceGroupSpec(kubeClient, rgname, root.KptGroup, resources)
-		expectedStatus = v1alpha1.ResourceGroupStatus{}
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
+		err = patchResources(kubeClient, rgname, resources)
 		Expect(err).NotTo(HaveOccurred())
+
+		expectedStatus = v1alpha1.ResourceGroupStatus{}
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Delete resource group")
 		deleteResourceGroup(kubeClient, rgname, root.KptGroup)
@@ -219,14 +218,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 	})
 
 	It("Test ResourceGroup controller with CRD v1beta1", func() {
-		config, err := clientConfig()
-		Expect(err).NotTo(HaveOccurred())
-		kubeClient, err = newKubeClient(config)
-		Expect(err).NotTo(HaveOccurred())
-
 		// Lookup CRD versions supported by the server
-		mapper, err := apiutil.NewDynamicRESTMapper(config)
-		Expect(err).NotTo(HaveOccurred())
 		mappings, err := mapper.RESTMappings(schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"})
 		Expect(err).NotTo(HaveOccurred())
 		versions := make(map[string]struct{}, len(mappings))
@@ -242,8 +234,10 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		Expect(err).NotTo(HaveOccurred(), "failed to apply v1beta1 ResourceGroup CRD: %v", err)
 
 		By("Wait for the CRD to be ready")
-		err = waitForCRD(kubeClient, "resourcegroups.kpt.dev")
-		Expect(err).NotTo(HaveOccurred(), "v1beta1 CRD is not ready")
+		waitForCRD(kubeClient, "resourcegroups.kpt.dev")
+
+		// Reset RESTMapper to pick up the new CRD version.
+		mapper.Reset()
 
 		By("Apply a ResourceGroup CR")
 		rgname := "crd-version"
@@ -256,14 +250,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 	})
 
 	It("Test ResourceGroup controller with CRD v1", func() {
-		config, err := clientConfig()
-		Expect(err).NotTo(HaveOccurred())
-		kubeClient, err = newKubeClient(config)
-		Expect(err).NotTo(HaveOccurred())
-
 		// Lookup CRD versions supported by the server
-		mapper, err := apiutil.NewDynamicRESTMapper(config)
-		Expect(err).NotTo(HaveOccurred())
 		mappings, err := mapper.RESTMappings(schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"})
 		Expect(err).NotTo(HaveOccurred())
 		versions := make(map[string]struct{}, len(mappings))
@@ -279,8 +266,10 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		Expect(err).NotTo(HaveOccurred(), "failed to apply v1 ResourceGroup CRD: %v", err)
 
 		By("Wait for the v1 CRD to be ready")
-		err = waitForCRD(kubeClient, "resourcegroups.kpt.dev")
-		Expect(err).NotTo(HaveOccurred(), "v1 CRD is not ready")
+		waitForCRD(kubeClient, "resourcegroups.kpt.dev")
+
+		// Reset RESTMapper to pick up the new CRD version.
+		mapper.Reset()
 
 		By("Apply a ResourceGroup CR")
 		rgname := "crd-version"
@@ -293,14 +282,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 	})
 
 	It("Test ResourceGroup upgrade from CRD v1beta1 to v1", func() {
-		config, err := clientConfig()
-		Expect(err).NotTo(HaveOccurred())
-		kubeClient, err = newKubeClient(config)
-		Expect(err).NotTo(HaveOccurred())
-
 		// Lookup CRD versions supported by the server
-		mapper, err := apiutil.NewDynamicRESTMapper(config)
-		Expect(err).NotTo(HaveOccurred())
 		mappings, err := mapper.RESTMappings(schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"})
 		Expect(err).NotTo(HaveOccurred())
 		versions := make(map[string]struct{}, len(mappings))
@@ -319,8 +301,10 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		Expect(err).NotTo(HaveOccurred(), "failed to apply v1beta1 ResourceGroup CRD: %v", err)
 
 		By("Wait for the CRD to be ready")
-		err = waitForCRD(kubeClient, "resourcegroups.kpt.dev")
-		Expect(err).NotTo(HaveOccurred(), "v1beta1 CRD is not ready")
+		waitForCRD(kubeClient, "resourcegroups.kpt.dev")
+
+		// Reset RESTMapper to pick up the new CRD version.
+		mapper.Reset()
 
 		By("Apply a ResourceGroup CR")
 		rgname := "crd-version"
@@ -331,8 +315,10 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		Expect(err).NotTo(HaveOccurred(), "failed to apply v1 ResourceGroup CRD: %v", err)
 
 		By("Wait for the v1 CRD to be ready")
-		err = waitForCRD(kubeClient, "resourcegroups.kpt.dev")
-		Expect(err).NotTo(HaveOccurred(), "v1 CRD is not ready")
+		waitForCRD(kubeClient, "resourcegroups.kpt.dev")
+
+		// Reset RESTMapper to pick up the new CRD version.
+		mapper.Reset()
 
 		By("We can get the applied ResourceGroup CR")
 		clusterRG := rg.DeepCopy()
@@ -341,6 +327,20 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 	})
 
 	It("Test ResourceGroup controller for KCC resources", func() {
+		// Lookup KCC CRD versions supported by the server
+		mappings, err := mapper.RESTMappings(schema.GroupKind{Group: "serviceusage.cnrm.cloud.google.com", Kind: "Service"})
+		if err != nil && meta.IsNoMatchError(err) {
+			Skip("Server does not have Config Connector installed")
+		}
+		Expect(err).NotTo(HaveOccurred())
+		versions := make(map[string]struct{}, len(mappings))
+		for _, mapping := range mappings {
+			versions[mapping.GroupVersionKind.Version] = struct{}{}
+		}
+		if _, ok := versions["v1beta1"]; !ok {
+			Skip("Server does not have Config Connector installed")
+		}
+
 		By("Creating a resourcegroup")
 		rgname := "group-kcc"
 		newKptResourceGroup(kubeClient, rgname, "")
@@ -351,7 +351,8 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		defer deleteKCCResource(kubeClient)
 
 		By("Updating resourcegroup")
-		updateResourceGroupSpec(kubeClient, rgname, root.KptGroup, []v1alpha1.ObjMetadata{resource})
+		err = patchResources(kubeClient, rgname, []v1alpha1.ObjMetadata{resource})
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Verifying the resourcegroup status: It can surface the kcc resource status.conditions")
 		expectedStatus := initResourceStatus()
@@ -360,8 +361,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 			makeKCCResourceStatus(resource),
 		}
 
-		err := waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Delete the resourcegroup")
 		deleteResourceGroup(kubeClient, rgname, root.KptGroup)
@@ -375,8 +375,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		By("The status of the resourcegroup should be empty")
 		expectedStatus := initResourceStatus()
 		expectedStatus.ObservedGeneration = 1
-		err := waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Updating resources")
 		resources := []v1alpha1.ObjMetadata{
@@ -389,19 +388,19 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 				},
 			},
 		}
-		_ = updateResourceGroupSpec(kubeClient, rgname, root.KptGroup, resources)
+		err := patchResources(kubeClient, rgname, resources)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating resourcegroup")
 		expectedStatus.ObservedGeneration = 2
 		expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 			{
 				ObjMetadata: resources[0],
-				Status:      "NotFound",
+				Status:      v1alpha1.NotFound,
 			},
 		}
 
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Creating CRD")
 		applyCRD(kubeClient)
@@ -412,19 +411,18 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 			{
 				ObjMetadata: resources[0],
-				Status:      "Current",
+				Status:      v1alpha1.Current,
 				Conditions: []v1alpha1.Condition{
 					{
-						Message: "This object is not owned by any inventory object. The status for the current object may not reflect the specification for it in current ResourceGroup.",
 						Type:    v1alpha1.Ownership,
-						Status:  "Unknown",
+						Status:  v1alpha1.UnknownConditionStatus,
 						Reason:  "Unknown",
+						Message: "This object is not owned by any inventory object.",
 					},
 				},
 			},
 		}
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Deleting CRD")
 		deleteCRD(kubeClient)
@@ -432,11 +430,10 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 			{
 				ObjMetadata: resources[0],
-				Status:      "NotFound",
+				Status:      v1alpha1.NotFound,
 			},
 		}
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 	})
 
 	It("Test ResourceGroup controller consumes apply status for resources", func() {
@@ -447,8 +444,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		By("The status of the resourcegroup should be empty")
 		expectedStatus := initResourceStatus()
 		expectedStatus.ObservedGeneration = 1
-		err := waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Creating and applying CM resources")
 		resources := []v1alpha1.ObjMetadata{
@@ -511,7 +507,9 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		}
 		// Apply all but the last CM resource to test NotFound error.
 		applyResources(kubeClient, resources[:len(resources)-1], rgname)
-		_ = updateResourceGroupSpec(kubeClient, rgname, root.KptGroup, resources)
+
+		err := patchResources(kubeClient, rgname, resources)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("The status field should use the old logic when actuation/strategy status is not set")
 		expectedStatus.ObservedGeneration = 2
@@ -549,11 +547,9 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 			{
 				ObjMetadata: resources[6],
 				Status:      v1alpha1.NotFound,
-				SourceHash:  "1234567",
 			},
 		}
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("The status should contain the resources with correct status set by controller when actuation and strategy is set/injected")
 		injectStatuses := []v1alpha1.ResourceStatus{
@@ -568,14 +564,14 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 				ObjMetadata: resources[1],
 				Strategy:    v1alpha1.Apply,
 				Actuation:   v1alpha1.ActuationPending,
-				Reconcile:   v1alpha1.ReconcileSucceeded,
+				Reconcile:   v1alpha1.ReconcilePending,
 				Status:      v1alpha1.InProgress,
 			},
 			{
 				ObjMetadata: resources[2],
 				Strategy:    v1alpha1.Apply,
 				Actuation:   v1alpha1.ActuationFailed,
-				Reconcile:   v1alpha1.ReconcileSucceeded,
+				Reconcile:   v1alpha1.ReconcilePending,
 				Status:      v1alpha1.InProgress,
 			},
 			{
@@ -607,56 +603,84 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 
 		resourceVersionBefore, err := getResourceVersion(kubeClient, rgname)
 		Expect(err).NotTo(HaveOccurred())
-		updateResourceGroupResourceStatus(kubeClient, rgname, injectStatuses)
+
+		err = patchResourceStatuses(kubeClient, rgname, injectStatuses)
+		Expect(err).NotTo(HaveOccurred())
+
+		// ResourceVersion should change with a spec update
+		resourceVersionAfter, err := getResourceVersion(kubeClient, rgname)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resourceVersionAfter).NotTo(BeIdenticalTo(resourceVersionBefore))
+		resourceVersionBefore = resourceVersionAfter
+
 		expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 			{
 				ObjMetadata: resources[0],
+				Strategy:    v1alpha1.Apply,
+				Actuation:   v1alpha1.ActuationSucceeded,
+				Reconcile:   v1alpha1.ReconcileSucceeded,
 				Status:      v1alpha1.Current,
 				SourceHash:  "1234567",
 			},
 			{
 				ObjMetadata: resources[1],
+				Strategy:    v1alpha1.Apply,
+				Actuation:   v1alpha1.ActuationPending,
+				Reconcile:   v1alpha1.ReconcilePending,
 				Status:      v1alpha1.Unknown,
 				SourceHash:  "1234567",
 			},
 			{
 				ObjMetadata: resources[2],
+				Strategy:    v1alpha1.Apply,
+				Actuation:   v1alpha1.ActuationFailed,
+				Reconcile:   v1alpha1.ReconcilePending,
 				Status:      v1alpha1.Unknown,
 				SourceHash:  "1234567",
 			},
 			{
 				ObjMetadata: resources[3],
+				Strategy:    v1alpha1.Delete,
+				Actuation:   v1alpha1.ActuationSucceeded,
+				Reconcile:   v1alpha1.ReconcileSucceeded,
 				Status:      v1alpha1.Current,
 				SourceHash:  "1234567",
 			},
 			{
 				ObjMetadata: resources[4],
+				Strategy:    v1alpha1.Apply,
+				Actuation:   v1alpha1.ActuationSucceeded,
+				Reconcile:   v1alpha1.ReconcilePending,
 				Status:      v1alpha1.Current,
 				SourceHash:  "1234567",
 			},
 			{
 				ObjMetadata: resources[5],
+				Strategy:    v1alpha1.Apply,
+				Actuation:   v1alpha1.ActuationSucceeded,
+				Reconcile:   v1alpha1.ReconcileSucceeded,
 				Status:      v1alpha1.Current,
 				SourceHash:  "1234567",
 			},
 			{
 				ObjMetadata: resources[6],
 				Status:      v1alpha1.NotFound,
-				SourceHash:  "1234567",
 			},
 		}
-		err = waitResourceGroupStatus(kubeClient, expectedStatus, rgname)
-		Expect(err).NotTo(HaveOccurred())
-		resourceVersionAfter, err := getResourceVersion(kubeClient, rgname)
+		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
+
+		// ResourceVersion should change with a status update
+		resourceVersionAfter, err = getResourceVersion(kubeClient, rgname)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(resourceVersionAfter).NotTo(BeIdenticalTo(resourceVersionBefore))
+		resourceVersionBefore = resourceVersionAfter
 
 		// Wait and check to see we don't cause an infinite/recursive reconcile loop
 		// by ensuring the resourceVersion doesn't change.
 		time.Sleep(60 * time.Second)
-		resourceVersionAfterWait, err := getResourceVersion(kubeClient, rgname)
+		resourceVersionAfter, err = getResourceVersion(kubeClient, rgname)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(resourceVersionAfter).To(BeIdenticalTo(resourceVersionAfterWait))
+		Expect(resourceVersionAfter).To(BeIdenticalTo(resourceVersionBefore))
 
 		By("Delete resource group")
 		deleteResourceGroup(kubeClient, rgname, root.KptGroup)
@@ -668,41 +692,25 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 
 })
 
-func newKptResourceGroup(kubeClient client.Client, name, id string) v1alpha1.ResourceGroup {
-	rg := v1alpha1.ResourceGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testNamespace,
-			Name:      name,
-		},
-	}
+func newKptResourceGroup(kubeClient client.Client, name, id string) *v1alpha1.ResourceGroup {
+	rg := &v1alpha1.ResourceGroup{}
+	rg.SetNamespace(testNamespace)
+	rg.SetName(name)
 	if id != "" {
 		rg.SetLabels(map[string]string{
 			common.InventoryLabel: id,
 		})
 	}
 	By("Create ResourceGroup " + name)
-	err := kubeClient.Create(context.TODO(), &rg)
+	err := kubeClient.Create(context.TODO(), rg)
 	Expect(err).NotTo(HaveOccurred(), "Failed to create ResourceGroup %s", name)
 	return rg
 }
 
 func deleteResourceGroup(kubeClient client.Client, name, group string) {
-	var rg client.Object
-	if group == root.ConfigSyncGroup {
-		rg = &v1alpha1.ResourceGroup{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: testNamespace,
-				Name:      name,
-			},
-		}
-	} else {
-		rg = &v1alpha1.ResourceGroup{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: testNamespace,
-				Name:      name,
-			},
-		}
-	}
+	rg := &v1alpha1.ResourceGroup{}
+	rg.SetNamespace(testNamespace)
+	rg.SetName(name)
 
 	By("Delete ResourceGroup " + name)
 	err := kubeClient.Delete(context.TODO(), rg)
@@ -727,8 +735,7 @@ func createResources(kubeClient client.Client, resources []v1alpha1.ObjMetadata)
 func applyCRD(kubeClient client.Client) {
 	err := applyTestFile("testdata/testcase_crd.yaml")
 	Expect(err).ShouldNot(HaveOccurred())
-	err = waitForCRD(kubeClient, "testcases.test.io")
-	Expect(err).ShouldNot(HaveOccurred())
+	waitForCRD(kubeClient, "testcases.test.io")
 }
 
 func deleteCRD(kubeClient client.Client) {
@@ -763,6 +770,7 @@ func applyResources(kubeClient client.Client, resources []v1alpha1.ObjMetadata, 
 			"config.k8s.io/owning-inventory":      id,
 			resourcegroup.SourceHashAnnotationKey: "1234567890",
 		})
+
 		err := kubeClient.Get(context.TODO(), client.ObjectKey{Name: r.Name, Namespace: r.Namespace}, u.DeepCopy())
 		if err != nil {
 			Expect(kubeerrors.IsNotFound(err)).Should(Equal(true))
@@ -773,22 +781,6 @@ func applyResources(kubeClient client.Client, resources []v1alpha1.ObjMetadata, 
 			Expect(err).NotTo(HaveOccurred(), "Failed to update resource %s: %v", r.Name, err)
 		}
 	}
-}
-
-func updateResourceGroupResourceStatus(kubeClient client.Client,
-	name string, statuses []v1alpha1.ResourceStatus) error {
-
-	rg := &v1alpha1.ResourceGroup{}
-	err := kubeClient.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: testNamespace}, rg)
-	if err != nil {
-		if kubeerrors.IsNotFound(err) {
-			return fmt.Errorf("resourcegroup %q in namespace %q is not found", name, testNamespace)
-		}
-		return err
-	}
-
-	rg.Status.ResourceStatuses = statuses
-	return kubeClient.Status().Update(context.TODO(), rg)
 }
 
 func makeNConfigMaps(n int) []v1alpha1.ObjMetadata {
@@ -826,12 +818,16 @@ func initResourceStatus() v1alpha1.ResourceGroupStatus {
 	return v1alpha1.ResourceGroupStatus{
 		Conditions: []v1alpha1.Condition{
 			{
-				Type:   v1alpha1.Reconciling,
-				Status: v1alpha1.FalseConditionStatus,
+				Type:    v1alpha1.Reconciling,
+				Status:  v1alpha1.FalseConditionStatus,
+				Reason:  resourcegroup.FinishReconciling,
+				Message: "finish reconciling",
 			},
 			{
-				Type:   v1alpha1.Stalled,
-				Status: v1alpha1.FalseConditionStatus,
+				Type:    v1alpha1.Stalled,
+				Status:  v1alpha1.FalseConditionStatus,
+				Reason:  resourcegroup.FinishReconciling,
+				Message: "finish reconciling",
 			},
 		},
 	}
@@ -871,177 +867,175 @@ func getResourceVersion(kubeClient client.Client, name string) (string, error) {
 	return rg.ResourceVersion, nil
 }
 
-func waitResourceGroupStatus(kubeClient client.Client, status v1alpha1.ResourceGroupStatus, name string) error {
-	return wait.PollImmediate(pollInterval, waitTimeout, func() (bool, error) {
-		rg := &v1alpha1.ResourceGroup{}
-		err := kubeClient.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: testNamespace}, rg)
-		if err != nil && kubeerrors.IsNotFound(err) {
-			return false, nil
-		}
-		if err != nil {
-			return false, fmt.Errorf("failed to get resource group %v", err)
-		}
-		liveStatus := rg.Status
+func waitForResourceGroupStatus(kubeClient client.Client, status v1alpha1.ResourceGroupStatus, name string) {
+	EventuallyWithOffset(1, func() v1alpha1.ResourceGroupStatus {
+		obj := &v1alpha1.ResourceGroup{}
+		obj.SetNamespace(testNamespace)
+		obj.SetName(name)
 
-		if liveStatus.ObservedGeneration != status.ObservedGeneration {
-			return false, nil
+		err := kubeClient.Get(context.TODO(), client.ObjectKeyFromObject(obj), obj)
+		if err != nil && kubeerrors.IsNotFound(err) {
+			return v1alpha1.ResourceGroupStatus{}
 		}
-		if len(liveStatus.Conditions) != len(status.Conditions) {
-			return false, nil
-		}
-		for i, c := range liveStatus.Conditions {
-			expectedC := status.Conditions[i]
-			if c.Type == expectedC.Type && c.Status == expectedC.Status {
-				continue
-			}
-			return false, nil
-		}
-		if len(liveStatus.ResourceStatuses) != len(status.ResourceStatuses) {
-			return false, nil
-		}
-		for i, r := range liveStatus.ResourceStatuses {
-			expectedR := status.ResourceStatuses[i]
-			if r.Status != expectedR.Status {
-				return false, nil
-			}
-			if len(r.Conditions) != len(expectedR.Conditions) {
-				return false, nil
-			}
-			for i, c := range r.Conditions {
-				ec := expectedR.Conditions[i]
-				if c.Type != ec.Type {
-					return false, nil
-				}
-				if c.Message != ec.Message && !strings.Contains(c.Message, ec.Message) {
-					return false, nil
-				}
-			}
-		}
-		if len(liveStatus.SubgroupStatuses) != len(status.SubgroupStatuses) {
-			return false, nil
-		}
-		for i, r := range liveStatus.SubgroupStatuses {
-			expectedR := status.SubgroupStatuses[i]
-			if r.Status != expectedR.Status {
-				return false, nil
-			}
-		}
-		return true, nil
-	})
+		Expect(err).ToNot(HaveOccurred())
+
+		return obj.Status
+	}, pollInterval).WithTimeout(waitTimeout).Should(Asserter.EqualMatcher(status))
 }
 
-func updateResourceGroupSpec(kubeClient client.Client,
-	name, group string,
-	resources []v1alpha1.ObjMetadata) error {
-	var rg client.Object
-	rg = &v1alpha1.ResourceGroup{}
-	err := kubeClient.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: testNamespace}, rg)
-	if err != nil && kubeerrors.IsNotFound(err) {
-		return fmt.Errorf("resourcegroup is not found")
-	}
+func patchResourceGroup(kubeClient client.Client, name string, modify func(*v1alpha1.ResourceGroup)) error {
+	obj := &v1alpha1.ResourceGroup{}
+	obj.SetNamespace(testNamespace)
+	obj.SetName(name)
+
+	err := kubeClient.Get(context.TODO(), client.ObjectKeyFromObject(obj), obj)
 	if err != nil {
 		return err
 	}
-	if group == root.ConfigSyncGroup {
-		r := rg.(*v1alpha1.ResourceGroup)
-		r.Spec.Resources = resources
-		return kubeClient.Update(context.TODO(), rg)
-	} else {
-		r := rg.(*v1alpha1.ResourceGroup)
-		r.Spec.Resources = resources
-		return kubeClient.Update(context.TODO(), rg)
-	}
-}
 
-func addStatusDisabledAnnotation(kubeClient client.Client, name string) error {
-	rg := &v1alpha1.ResourceGroup{}
-	err := kubeClient.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: testNamespace}, rg)
+	obj2 := obj.DeepCopy()
+	modify(obj2)
+
+	err = kubeClient.Patch(context.TODO(), obj2, client.MergeFrom(obj))
 	if err != nil {
 		return err
 	}
-	annotations := rg.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
-	annotations[root.DisableStatusKey] = root.DisableStatusValue
-	rg.SetAnnotations(annotations)
-	return kubeClient.Update(context.TODO(), rg)
+	return nil
 }
 
-func updateResourceGroupSubGroup(kubeClient client.Client,
-	name, group string,
-	subgroups []v1alpha1.GroupMetadata) error {
-	var rg client.Object
-	if group == root.ConfigSyncGroup {
-		rg = &v1alpha1.ResourceGroup{}
-	} else {
-		rg = &v1alpha1.ResourceGroup{}
-	}
-	err := kubeClient.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: testNamespace}, rg)
-	if err != nil && kubeerrors.IsNotFound(err) {
-		return fmt.Errorf("resourcegroup is not found")
-	}
+func patchResourceGroupStatus(kubeClient client.Client, name string, modify func(*v1alpha1.ResourceGroup)) error {
+	obj := &v1alpha1.ResourceGroup{}
+	obj.SetNamespace(testNamespace)
+	obj.SetName(name)
+
+	err := kubeClient.Get(context.TODO(), client.ObjectKeyFromObject(obj), obj)
 	if err != nil {
 		return err
 	}
-	if group == root.ConfigSyncGroup {
-		r := rg.(*v1alpha1.ResourceGroup)
-		r.Spec.Subgroups = subgroups
-		return kubeClient.Update(context.TODO(), rg)
+
+	obj2 := obj.DeepCopy()
+	modify(obj2)
+
+	err = kubeClient.Status().Patch(context.TODO(), obj2, client.MergeFrom(obj))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func patchResourceStatuses(kubeClient client.Client, name string, statuses []v1alpha1.ResourceStatus) error {
+	return patchResourceGroupStatus(kubeClient, name, func(obj *v1alpha1.ResourceGroup) {
+		obj.Status.ResourceStatuses = statuses
+	})
+}
+
+func patchResources(kubeClient client.Client, name string, resources []v1alpha1.ObjMetadata) error {
+	return patchResourceGroup(kubeClient, name, func(obj *v1alpha1.ResourceGroup) {
+		obj.Spec.Resources = resources
+	})
+}
+
+func patchStatusDisabled(kubeClient client.Client, name string) error {
+	return patchResourceGroup(kubeClient, name, func(obj *v1alpha1.ResourceGroup) {
+		annotations := obj.GetAnnotations()
+		if annotations == nil {
+			annotations = make(map[string]string, 1)
+		}
+		annotations[root.DisableStatusKey] = root.DisableStatusValue
+		obj.SetAnnotations(annotations)
+	})
+}
+
+func patchSubgroups(kubeClient client.Client, name string, subgroups []v1alpha1.GroupMetadata) error {
+	obj := &v1alpha1.ResourceGroup{}
+	obj.SetNamespace(testNamespace)
+	obj.SetName(name)
+
+	err := kubeClient.Get(context.TODO(), client.ObjectKeyFromObject(obj), obj)
+	if err != nil {
+		return err
+	}
+
+	obj2 := obj.DeepCopy()
+	obj2.Spec.Subgroups = subgroups
+
+	err = kubeClient.Patch(context.TODO(), obj2, client.MergeFrom(obj))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func waitForObjectStatus(kubeClient client.Client, obj *unstructured.Unstructured, desiredStatus kstatus.Status) {
+	EventuallyWithOffset(1, func() kstatus.Status {
+		err := kubeClient.Get(context.TODO(), client.ObjectKeyFromObject(obj), obj)
+		if err != nil && kubeerrors.IsNotFound(err) {
+			return kstatus.NotFoundStatus
+		}
+		Expect(err).ToNot(HaveOccurred())
+
+		result, err := kstatus.Compute(obj)
+		Expect(err).ToNot(HaveOccurred())
+
+		return result.Status
+	}, pollInterval).WithTimeout(waitTimeout).Should(Equal(desiredStatus))
+}
+
+func waitForDeploymentCurrent(kubeClient client.Client, namespace, name string) {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(appsv1.SchemeGroupVersion.WithKind("Deployment"))
+	obj.SetNamespace(namespace)
+	obj.SetName(name)
+	waitForObjectStatus(kubeClient, obj, kstatus.CurrentStatus)
+}
+
+func waitForNamespaceCurrent(kubeClient client.Client, namespace string) {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Namespace"))
+	obj.SetName(namespace)
+	waitForObjectStatus(kubeClient, obj, kstatus.CurrentStatus)
+}
+
+func waitForNamespaceNotFound(kubeClient client.Client, namespace string) {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Namespace"))
+	obj.SetName(namespace)
+	waitForObjectStatus(kubeClient, obj, kstatus.NotFoundStatus)
+}
+
+func deleteNamespace(kubeClient client.Client, namespace string) {
+	obj := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	err := kubeClient.Delete(context.TODO(), obj,
+		client.PropagationPolicy(metav1.DeletePropagationForeground))
+	if err != nil {
+		Expect(kubeerrors.IsNotFound(err)).Should(Equal(true))
 	} else {
-		r := rg.(*v1alpha1.ResourceGroup)
-		r.Spec.Subgroups = subgroups
-		return kubeClient.Update(context.TODO(), rg)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Wait for namespace to be deleted")
+		waitForNamespaceNotFound(kubeClient, namespace)
 	}
 }
 
-func clientConfig() (*rest.Config, error) {
-	return clientcmd.BuildConfigFromFlags("", path.Join(os.Getenv("HOME"), ".kube/config"))
-}
+func applyNamespace(kubeClient client.Client, namespace string) {
+	obj := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	err := kubeClient.Create(context.TODO(), obj)
+	if err != nil {
+		Expect(kubeerrors.IsAlreadyExists(err)).Should(Equal(true))
+	} else {
+		Expect(err).NotTo(HaveOccurred())
+	}
 
-func newclientSet(config *rest.Config) (*kubernetes.Clientset, error) {
-	return kubernetes.NewForConfig(config)
-}
-
-func newKubeClient(config *rest.Config) (client.Client, error) {
-	return client.New(config, client.Options{})
-}
-
-func waitForDeployment(clientSet *kubernetes.Clientset, namespace, name string) error {
-	return wait.PollImmediate(pollInterval, waitTimeout, func() (bool, error) {
-		d, err := clientSet.AppsV1().Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-		if err != nil && kubeerrors.IsNotFound(err) {
-			return false, nil
-		}
-		if err != nil {
-			return false, fmt.Errorf("failed to get deployment %s: %v", name, err)
-		}
-		return d.Status.Replicas == d.Status.AvailableReplicas &&
-			d.Status.Replicas == d.Status.ReadyReplicas, nil
-	})
-}
-
-func waitForNamespace(clientSet *kubernetes.Clientset, name string) error {
-	return wait.PollImmediate(pollInterval, waitTimeout, func() (bool, error) {
-		d, err := clientSet.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
-		if err != nil && kubeerrors.IsNotFound(err) {
-			return false, nil
-		}
-		if err != nil {
-			return false, fmt.Errorf("failed to get namespace %s: %v", name, err)
-		}
-		return d.Status.Phase == corev1.NamespaceActive, nil
-	})
-}
-
-func waitForNamespaceToBeDeleted(clientSet *kubernetes.Clientset, name string) error {
-	return wait.PollImmediate(pollInterval, waitTimeout, func() (bool, error) {
-		_, err := clientSet.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
-		if kubeerrors.IsNotFound(err) {
-			return true, nil
-		}
-		return false, err
-	})
+	By("Wait for namespace to be ready")
+	waitForNamespaceCurrent(kubeClient, namespace)
 }
 
 func controllerPodsNoRestart(clientSet *kubernetes.Clientset) error {
@@ -1119,29 +1113,24 @@ func dumpEvents(clientSet *kubernetes.Clientset, namespace string) {
 	for _, e := range sortedEvents {
 		fmt.Printf("At %v - event for %v: %v %v: %v\n", e.FirstTimestamp, e.InvolvedObject.Name, e.Source, e.Reason, e.Message)
 	}
+	fmt.Println()
 }
 
-func waitForCRD(kubeClient client.Client, name string) error {
-	crd := &v1.CustomResourceDefinition{}
-	crd.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "apiextensions.k8s.io",
-		Version: "v1",
-		Kind:    "CustomResourceDefinition",
-	})
-	crd.SetName(name)
+func waitForCRD(kubeClient client.Client, name string) {
+	EventuallyWithOffset(1, func() kstatus.Status {
+		obj := &unstructured.Unstructured{}
+		obj.SetGroupVersionKind(apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
+		obj.SetName(name)
 
-	return wait.PollImmediate(pollInterval, waitTimeout, func() (bool, error) {
-		err := kubeClient.Get(context.TODO(), client.ObjectKey{Name: crd.Name}, crd)
-		if err != nil {
-			return false, err
+		err := kubeClient.Get(context.TODO(), client.ObjectKeyFromObject(obj), obj)
+		if err != nil && kubeerrors.IsNotFound(err) {
+			return kstatus.NotFoundStatus
 		}
-		for _, condition := range crd.Status.Conditions {
-			if condition.Type == v1.Established {
-				if condition.Status == v1.ConditionTrue {
-					return true, nil
-				}
-			}
-		}
-		return false, nil
-	})
+		Expect(err).ToNot(HaveOccurred())
+
+		result, err := kstatus.Compute(obj)
+		Expect(err).ToNot(HaveOccurred())
+
+		return result.Status
+	}, pollInterval).WithTimeout(waitTimeout).Should(Equal(kstatus.CurrentStatus))
 }

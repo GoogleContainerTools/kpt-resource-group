@@ -33,6 +33,8 @@ import (
 	"kpt.dev/resourcegroup/controllers/typeresolver"
 )
 
+const contextRootControllerKey = contextKey("root-controller")
+
 var c client.Client
 var ctx context.Context
 
@@ -51,7 +53,7 @@ var _ = Describe("Root Reconciler", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 
 		logger := reconcilerKpt.log.WithValues("Controller", "Root")
-		ctx = context.WithValue(context.TODO(), "root-controller", logger)
+		ctx = context.WithValue(context.TODO(), contextRootControllerKey, logger)
 		resolver, err := typeresolver.NewTypeResolver(mgr, logger)
 		Expect(err).ShouldNot(HaveOccurred())
 		reconcilerKpt.resolver = resolver

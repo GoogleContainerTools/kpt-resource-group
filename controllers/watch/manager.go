@@ -18,10 +18,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
@@ -108,10 +108,8 @@ func (m *Manager) NeedsUpdate() bool {
 
 // UpdateWatches accepts a map of GVKs that should be watched and takes the
 // following actions:
-// - stop watchers for any GroupVersionKind that is not present in the given
-//   map.
-// - start watchers for any GroupVersionKind that is present in the given map
-//   and not present in the current watch map.
+// - stop watchers for any GroupVersionKind that is not present in the given map.
+// - start watchers for any GroupVersionKind that is present in the given map and not present in the current watch map.
 //
 // This function is threadsafe.
 func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVersionKind]struct{}) error {
@@ -144,9 +142,9 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 	}
 
 	if startedWatches > 0 || stoppedWatches > 0 {
-		glog.Infof("The watch manager made new progress: started %d new watches, and stopped %d watches", startedWatches, stoppedWatches)
+		klog.Infof("The watch manager made new progress: started %d new watches, and stopped %d watches", startedWatches, stoppedWatches)
 	} else {
-		glog.V(4).Infof("The watch manager made no new progress")
+		klog.V(4).Infof("The watch manager made no new progress")
 	}
 	if len(errs) == 0 {
 		return nil
@@ -192,7 +190,7 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 // threadsafe.
 func (m *Manager) runWatcher(ctx context.Context, r Runnable, gvk schema.GroupVersionKind) {
 	if err := r.Run(ctx); err != nil {
-		glog.Warningf("Error running watcher for %s: %v", gvk.String(), err)
+		klog.Warningf("Error running watcher for %s: %v", gvk.String(), err)
 		m.mux.Lock()
 		delete(m.watcherMap, gvk)
 		m.needsUpdate = true

@@ -32,13 +32,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"kpt.dev/resourcegroup/controllers/handler"
 	"kpt.dev/resourcegroup/controllers/resourcegroup"
 	"kpt.dev/resourcegroup/controllers/resourcemap"
 	"kpt.dev/resourcegroup/controllers/typeresolver"
 	"kpt.dev/resourcegroup/controllers/watch"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
 const (
@@ -47,6 +47,12 @@ const (
 	DisableStatusKey   = "configsync.gke.io/status"
 	DisableStatusValue = "disabled"
 )
+
+// contextKey is a custom type for wrapping context values to make them unique
+// to this package
+type contextKey string
+
+const contextLoggerKey = contextKey("logger")
 
 // reconciler reconciles a ResourceGroup object
 // It only accepts the Create, Update, Delete events of ResourceGroup objects.
@@ -86,7 +92,7 @@ type reconciler struct {
 
 func (r *reconciler) Reconcile(rootCtx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.log
-	ctx := context.WithValue(rootCtx, "logger", logger)
+	ctx := context.WithValue(rootCtx, contextLoggerKey, logger)
 	logger.Info("starts reconciling")
 	return r.reconcileKptGroup(ctx, logger, req)
 }
@@ -141,8 +147,6 @@ func (r *reconciler) updateWatches(ctx context.Context, name string, gks []schem
 		gvk, found := r.resolver.Resolve(gk)
 		if found {
 			gvkMap[gvk] = struct{}{}
-		} else {
-
 		}
 	}
 	return r.watches.UpdateWatches(ctx, gvkMap)

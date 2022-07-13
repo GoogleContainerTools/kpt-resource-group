@@ -47,7 +47,6 @@ spec:
         - --enable-leader-election
         - --v=5
         image: controller:latest
-        imagePullPolicy: Always
         name: manager
         resources:
           requests:

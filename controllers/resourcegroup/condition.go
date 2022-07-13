@@ -18,8 +18,8 @@ import (
 	"sort"
 	"time"
 
-	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 )
 
 func newReconcilingCondition(status v1alpha1.ConditionStatus, reason, message string) v1alpha1.Condition {
@@ -48,7 +48,7 @@ func newStalledCondition(status v1alpha1.ConditionStatus, reason, message string
 // the remaining conditions are sorted alphabetically according their types.
 //
 // Returns:
-//    * a new slice of conditions including the ordered conditions.
+//   - a new slice of conditions including the ordered conditions.
 //
 // The +kubebuilder:printcolumn markers on the ResourceGroup struct expect the type of the first
 // Condition in the slice to be Reconciling, and the type of the second Condition to be Stalled.

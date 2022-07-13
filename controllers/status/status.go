@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang/glog"
-	"kpt.dev/resourcegroup/controllers/resourcemap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/klog/v2"
+	"kpt.dev/resourcegroup/controllers/resourcemap"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/yaml"
 
@@ -44,7 +44,7 @@ func ComputeStatus(obj *unstructured.Unstructured) *resourcemap.CachedStatus {
 		resStatus.Status = v1alpha1.Unknown
 	}
 	if err != nil {
-		glog.Errorf("kstatus.Compute for %v failed: %v", obj, err)
+		klog.Errorf("kstatus.Compute for %v failed: %v", obj, err)
 	}
 	if err != nil || result == nil {
 		resStatus.Status = v1alpha1.Unknown
@@ -60,7 +60,7 @@ func ComputeStatus(obj *unstructured.Unstructured) *resourcemap.CachedStatus {
 		// go/timeout-fail-fast-kpt
 		conditions, cErr := ReadKCCResourceConditions(obj)
 		if cErr != nil {
-			glog.Errorf(cErr.Error())
+			klog.Errorf(cErr.Error())
 			// fallback to use the kstatus conditions for this resource.
 			resStatus.Conditions = ConvertKstatusConditions(result.Conditions)
 		} else {

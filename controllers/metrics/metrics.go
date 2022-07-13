@@ -22,12 +22,6 @@ import (
 
 const namespace = "resourcegroup"
 
-// countBuckets defines the buckets into which observations are counted. Each
-// element in the slice is the upper inclusive bound of a bucket. The
-// values must be sorted in strictly increasing order. There is no need
-// to add a highest bucket with +Inf bound, it will be added implicitly.
-var countBuckets = []float64{1, 5, 10, 50, 100, 200, 500, 1000}
-
 var (
 	// ReconcileDuration tracks the time duration in seconds of reconciling
 	// a ResourceGroup CR by the ResourceGroup controller.

@@ -18,22 +18,21 @@ import (
 	"flag"
 	"os"
 
-	"github.com/go-logr/glogr"
 	"github.com/go-logr/logr"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
+	"kpt.dev/resourcegroup/controllers/log"
 	ocmetrics "kpt.dev/resourcegroup/controllers/metrics"
 	"kpt.dev/resourcegroup/controllers/profiler"
 	"kpt.dev/resourcegroup/controllers/resourcegroup"
 	"kpt.dev/resourcegroup/controllers/resourcemap"
 	"kpt.dev/resourcegroup/controllers/root"
 	"kpt.dev/resourcegroup/controllers/typeresolver"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -43,10 +42,6 @@ var (
 )
 
 func init() {
-	// glogr flags
-	_ = flag.Set("v", "1")
-	_ = flag.Set("logtostderr", "true")
-
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = v1alpha1.AddToScheme(scheme)
@@ -56,6 +51,8 @@ func init() {
 }
 
 func main() {
+	log.InitFlags()
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -65,7 +62,6 @@ func main() {
 	flag.Parse()
 
 	profiler.Service()
-	ctrl.SetLogger(glogr.New())
 
 	// Register the OpenCensus views
 	if err := ocmetrics.RegisterReconcilerMetricsViews(); err != nil {
@@ -134,7 +130,7 @@ func registerControllersForGroup(mgr ctrl.Manager, logger logr.Logger, group str
 	}
 
 	setupLog.Info("adding the ResourceGroup controller for group " + group)
-	if err := resourcegroup.NewRGController(mgr, channel, logger.WithName("ResourceGroup"), resolver, resMap, resourcegroup.DefaultDuration); err != nil {
+	if err := resourcegroup.NewRGController(mgr, channel, logger.WithName(v1alpha1.ResourceGroupKind), resolver, resMap, resourcegroup.DefaultDuration); err != nil {
 		setupLog.Error(err, "unable to create the ResourceGroup controller")
 		os.Exit(1)
 	}

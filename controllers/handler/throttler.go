@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -52,17 +52,14 @@ func NewThrottler(d time.Duration) *Throttler {
 
 // Create implements EventHandler. All create events are ignored.
 func (e *Throttler) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
-	return
 }
 
 // Update implements EventHandler. All update events are ignored.
 func (e *Throttler) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	return
 }
 
 // Delete implements EventHandler. All delete events are ignored.
 func (e *Throttler) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
-	return
 }
 
 // Generic implements EventHandler.
@@ -79,10 +76,10 @@ func (e *Throttler) Generic(evt event.GenericEvent, q workqueue.RateLimitingInte
 	e.lock.RLock()
 	_, found := e.mapping[r]
 	e.lock.RUnlock()
-	glog.V(4).Info("received a generic event in the throttler")
+	klog.V(4).Info("received a generic event in the throttler")
 	// Skip the event if there is already the same event in the queue
 	if found {
-		glog.V(4).Info("skip it since there is an event in the throttler")
+		klog.V(4).Info("skip it since there is an event in the throttler")
 		return
 	}
 
@@ -99,7 +96,7 @@ func (e *Throttler) Generic(evt event.GenericEvent, q workqueue.RateLimitingInte
 	go func() {
 		time.Sleep(e.duration)
 		q.Add(reconcile.Request{NamespacedName: r})
-		glog.V(4).Infof("add the request to the queue %v", r)
+		klog.V(4).Infof("add the request to the queue %v", r)
 		e.lock.Lock()
 		delete(e.mapping, r)
 		e.lock.Unlock()

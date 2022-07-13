@@ -19,7 +19,7 @@ set -o nounset
 set -o pipefail
 
 SCRIPT_ROOT=$(dirname ${BASH_SOURCE})/..
-KUBEBUILDER_VERSION=2.3.1
+KUBEBUILDER_VERSION=2.3.2
 go version
 
 cd ${SCRIPT_ROOT}

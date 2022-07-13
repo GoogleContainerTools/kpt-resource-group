@@ -1,0 +1,78 @@
+# Included by Makefile.
+# Rules related to dependencies.
+
+# Directory containing all build artifacts.  We need abspath here since
+# mounting a directory as a docker volume requires an abspath.  This should
+# eventually be pushed down into where docker commands are run rather than
+# requiring all our paths to be absolute.
+OUTPUT_DIR := $(abspath .output)
+
+# Self-contained GOPATH dir.
+GO_DIR := $(OUTPUT_DIR)/go
+
+# Directory containing installed go binaries.
+BIN_DIR := $(GO_DIR)/bin
+
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
+KUSTOMIZE_VERSION := v4.5.5
+KUSTOMIZE := $(GOBIN)/kustomize
+
+# v0.6.2 is the last version that supports v1beta1 CRDs and webhooks
+CONTROLLER_GEN_VERSION := v0.6.2
+CONTROLLER_GEN := $(GOBIN)/controller-gen
+
+ADDLICENSE_VERSION := v1.0.0
+ADDLICENSE := $(GOBIN)/addlicense
+
+GOLINT_VERSION := v1.46.2
+GOLINT := $(GOBIN)/golangci-lint
+
+KIND_VERSION := v0.14.0
+KIND := $(GOBIN)/kind
+
+KIND_CLUSTER_NAME := resource-group-e2e
+
+# install kustomize from source
+"$(KUSTOMIZE)": "$(OUTPUT_DIR)"
+	go install sigs.k8s.io/kustomize/kustomize/v4@$(KUSTOMIZE_VERSION)
+
+# install addlicense from source
+"$(ADDLICENSE)": "$(OUTPUT_DIR)"
+	go install github.com/google/addlicense@$(ADDLICENSE_VERSION)
+
+# install controller-gen from source
+"$(CONTROLLER_GEN)": "$(OUTPUT_DIR)"
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)
+
+# install golangci-lint from source
+"$(GOLINT)":
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLINT_VERSION)
+	
+# install kind from source
+"$(KIND)": "$(OUTPUT_DIR)"
+	go install sigs.k8s.io/kind@$(KIND_VERSION)
+
+# Creates the output directories
+"$(OUTPUT_DIR)":
+	@echo "+++ Creating the local build output directory: $(OUTPUT_DIR)"
+	@mkdir -p $(OUTPUT_DIR) $(GO_DIR) $(BIN_DIR)
+
+.PHONY: clean
+# Cleans all artifacts.
+clean: clean-kind-cluster
+	@echo "+++ Cleaning $(OUTPUT_DIR)"
+	@rm -rf $(OUTPUT_DIR)
+
+.PHONY: kind-cluster
+kind-cluster: "$(KIND)"
+	"$(KIND)" create cluster --name $(KIND_CLUSTER_NAME) --wait 5m
+
+.PHONY: clean-kind-cluster
+clean-kind-cluster: "$(KIND)"
+	"$(KIND)" delete cluster --name $(KIND_CLUSTER_NAME)

@@ -64,6 +64,7 @@ func makeKCCResourceStatus(resource v1alpha1.ObjMetadata) v1alpha1.ResourceStatu
 			{
 				Type:    "Ready",
 				Status:  "False",
+				Reason:  "UpdateFailed",
 				Message: "Update call failed",
 			},
 		},

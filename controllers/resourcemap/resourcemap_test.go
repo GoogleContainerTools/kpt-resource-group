@@ -19,9 +19,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 )
 
 var _ = Describe("Util tests", func() {

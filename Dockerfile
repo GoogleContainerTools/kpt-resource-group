@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the manager binary
-FROM golang:1.15 as builder
+FROM golang:1.17 as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -41,9 +41,5 @@ USER nonroot:nonroot
 
 # License file required for on-prem release.
 COPY LICENSES.txt LICENSES.txt
-
-# Copy in golang-lru source (MPL licensed dependency)
-# Source mirroring required for on-prem release.
-COPY golang-lru/ golang-lru/
 
 ENTRYPOINT ["/manager"]

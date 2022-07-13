@@ -40,9 +40,7 @@ func (s *resourceSet) Add(res resource) {
 
 // Remove removes res from resourceSet
 func (s *resourceSet) Remove(res resource) {
-	if _, ok := s.data[res]; ok {
-		delete(s.data, res)
-	}
+	delete(s.data, res)
 }
 
 // Has checks whether res is in resourceSet
@@ -87,9 +85,7 @@ func (s *resourceGroupSet) Add(group types.NamespacedName) {
 
 // Remove removes a group from the resourceGroupSet
 func (s *resourceGroupSet) Remove(group types.NamespacedName) {
-	if _, ok := s.data[group]; ok {
-		delete(s.data, group)
-	}
+	delete(s.data, group)
 }
 
 // Has checks whether a group is in the resourceGroupSet
@@ -151,13 +147,15 @@ type ResourceMap struct {
 // updates the resToResgroups map and resgroupToResources map atomically. The updates include:
 // 1) calculate the diff between resgroupToResources[`group`] and `resources`;
 // 2) update resToResgroups and gkToResources using the diff;
-//      * for resources only in resgroupToResources[`group`], remove <resource, group> from resToResgroups and gkToResources;
-//      * for resources only in `resources`, add <resource, group> into resToResgroups and gkToResources;
-//      * for resources in both resgroupToResources[`group`] and `resources`, do nothing.
+//   - for resources only in resgroupToResources[`group`], remove <resource, group> from resToResgroups and gkToResources;
+//   - for resources only in `resources`, add <resource, group> into resToResgroups and gkToResources;
+//   - for resources in both resgroupToResources[`group`] and `resources`, do nothing.
+//
 // 3) set resgroupToResources[group] to resources, or delete group from resgroupToResources if `resources` is empty.
 //
 // Returns:
-//    a slice of GroupKinds that should be watched
+//
+//	a slice of GroupKinds that should be watched
 //
 // To set the resources managed by a RG to be empty, call ResourceMap.Reconcile(group, []resource{}, false).
 //
@@ -220,9 +218,7 @@ func (m *ResourceMap) Reconcile(ctx context.Context, group types.NamespacedName,
 	}
 
 	if len(resources) == 0 && deleteRG {
-		if _, ok := m.resgroupToResources[group]; ok {
-			delete(m.resgroupToResources, group)
-		}
+		delete(m.resgroupToResources, group)
 	} else {
 		m.resgroupToResources[group] = newresourceSet(resources)
 	}

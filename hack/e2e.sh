@@ -22,16 +22,6 @@ SCRIPT_ROOT=$(dirname ${BASH_SOURCE})/..
 
 cd ${SCRIPT_ROOT}
 
-echo "Checking for kustomize"
-if [[ $(type -P "kustomize") ]]; then
-  echo "Found Kustomize"
-else
-  echo "Kustomize not found on path. Installing.."
-  wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz -O kustomize.tar.gz
-  tar -xzf kustomize.tar.gz
-  export PATH="$PATH:$(pwd)"
-fi
-
 GCP_PROJECT=resource-group-prow-test
 GCP_ZONE=us-west1-b
 # The cluster resource-group-e2e has Config Connector installed.
@@ -40,7 +30,6 @@ CLUSTER_NAME=resource-group-e2e
 RG_DOCKER_IMAGE=gcr.io/${GCP_PROJECT}/resource-group
 GIT_REV=$(git rev-parse HEAD)
 export IMG=${RG_DOCKER_IMAGE}:${GIT_REV}
-
 
 gcloud auth activate-service-account --key-file=/etc/service-account/service-account.json
 gcloud auth configure-docker
@@ -56,7 +45,4 @@ if [[ "$count" -eq 0 ]]; then
   kubectl create clusterrolebinding authenticated-admin --clusterrole cluster-admin --user $(gcloud config get-value account)
 fi
 
-make undeploy undeploy-otel-collector uninstall # cleanup from previous failed test runs
-make install deploy-otel-collector deploy
-make e2e-test
-make undeploy undeploy-otel-collector uninstall
+make e2e-test-gke

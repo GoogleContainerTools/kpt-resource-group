@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/go-logr/glogr"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/resourcegroup/controllers/metrics"
 	ocmetrics "kpt.dev/resourcegroup/controllers/metrics"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -49,7 +49,7 @@ func main() {
 		}
 	}()
 
-	for true {
+	for {
 		now := time.Now()
 		time.Sleep(1 * time.Second)
 		setMetrics(now)

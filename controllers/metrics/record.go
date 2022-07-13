@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/glog"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -102,7 +102,7 @@ func RecordPipelineError(ctx context.Context, nn types.NamespacedName, component
 		metricVal = 0
 	}
 	stats.Record(tagCtx, PipelineError.M(metricVal))
-	glog.Infof("Recording %s metric at component: %s, namespace: %s, reconciler: %s, sync type: %s with value %v",
+	klog.Infof("Recording %s metric at component: %s, namespace: %s, reconciler: %s, sync type: %s with value %v",
 		PipelineErrorView.Name, component, nn.Namespace, reconcilerName, nn.Name, metricVal)
 }
 

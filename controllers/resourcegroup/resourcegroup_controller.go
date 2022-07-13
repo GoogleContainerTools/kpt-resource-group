@@ -46,18 +46,24 @@ import (
 )
 
 const (
-	startReconciling         = "StartReconciling"
+	StartReconciling         = "StartReconciling"
 	startReconcilingMsg      = "start reconciling"
-	finishReconciling        = "FinishReconciling"
+	FinishReconciling        = "FinishReconciling"
 	finishReconcilingMsg     = "finish reconciling"
-	componentFailed          = "ComponentFailed"
+	ComponentFailed          = "ComponentFailed"
 	componentFailedMsgPrefix = "The following components failed:"
-	exceedTimeout            = "ExceedTimeout"
+	ExceedTimeout            = "ExceedTimeout"
 	exceedTimeoutMsg         = "Exceed timeout, the .status.observedGeneration and .status.resourceStatuses fields are old."
 	owningInventoryKey       = "config.k8s.io/owning-inventory"
 	SourceHashAnnotationKey  = "configmanagement.gke.io/token"
 	readinessComponent       = "readiness"
 )
+
+// contextKey is a custom type for wrapping context values to make them unique
+// to this package
+type contextKey string
+
+const contextLoggerKey = contextKey("logger")
 
 var DefaultDuration = 30 * time.Second
 
@@ -86,7 +92,7 @@ type reconciler struct {
 
 func (r *reconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.log
-	ctx := context.WithValue(c, "logger", logger)
+	ctx := context.WithValue(c, contextLoggerKey, logger)
 	logger.Info("starts reconciling")
 	return r.reconcileKpt(ctx, req, logger)
 }
@@ -179,7 +185,7 @@ func (r *reconciler) startReconcilingStatus(status v1alpha1.ResourceGroupStatus)
 		ResourceStatuses:   status.ResourceStatuses,
 		SubgroupStatuses:   status.SubgroupStatuses,
 		Conditions: []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.TrueConditionStatus, startReconciling, startReconcilingMsg),
+			newReconcilingCondition(v1alpha1.TrueConditionStatus, StartReconciling, startReconcilingMsg),
 			newStalledCondition(v1alpha1.FalseConditionStatus, "", ""),
 		},
 	}
@@ -202,7 +208,7 @@ func (r *reconciler) endReconcilingStatus(ctx context.Context, id string, namesp
 	case <-finish:
 		newStatus.ObservedGeneration = generation
 		newStatus.Conditions = []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg),
+			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
 			aggregateResourceStatuses(newStatus.ResourceStatuses),
 		}
 	case <-time.After(reconcileTimeout):
@@ -210,8 +216,8 @@ func (r *reconciler) endReconcilingStatus(ctx context.Context, id string, namesp
 		newStatus.ResourceStatuses = status.ResourceStatuses
 		newStatus.SubgroupStatuses = status.SubgroupStatuses
 		newStatus.Conditions = []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, exceedTimeout, exceedTimeoutMsg),
-			newStalledCondition(v1alpha1.TrueConditionStatus, exceedTimeout, exceedTimeoutMsg),
+			newReconcilingCondition(v1alpha1.FalseConditionStatus, ExceedTimeout, exceedTimeoutMsg),
+			newStalledCondition(v1alpha1.TrueConditionStatus, ExceedTimeout, exceedTimeoutMsg),
 		}
 	}
 
@@ -347,10 +353,10 @@ func aggregateResourceStatuses(statuses []v1alpha1.ResourceStatus) v1alpha1.Cond
 		}
 	}
 	if len(failedResources) > 0 {
-		return newStalledCondition(v1alpha1.TrueConditionStatus, componentFailed,
+		return newStalledCondition(v1alpha1.TrueConditionStatus, ComponentFailed,
 			componentFailedMsgPrefix+strings.Join(failedResources, ", "))
 	}
-	return newStalledCondition(v1alpha1.FalseConditionStatus, finishReconciling, finishReconcilingMsg)
+	return newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg)
 }
 
 func NewRGController(mgr ctrl.Manager, channel chan event.GenericEvent, logger logr.Logger,
@@ -363,7 +369,7 @@ func NewRGController(mgr ctrl.Manager, channel chan event.GenericEvent, logger l
 		resMap:   resMap,
 	}
 
-	c, err := controller.New("ResourceGroup", mgr, controller.Options{
+	c, err := controller.New(v1alpha1.ResourceGroupKind, mgr, controller.Options{
 		Reconciler: reconcile.Func(r.Reconcile),
 	})
 
