@@ -4,3 +4,4 @@ cover.out
 rg_manifest.yaml
 LICENSES.txt
 .output
+.vscode

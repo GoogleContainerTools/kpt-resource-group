@@ -58,9 +58,9 @@ var _ = Describe("Util tests", func() {
 			}
 
 			expected := map[schema.GroupKind]struct{}{
-				schema.GroupKind{Group: "", Kind: "ConfigMap"}:         {},
-				schema.GroupKind{Group: "apps", Kind: "Deployment"}:    {},
-				schema.GroupKind{Group: "groupname", Kind: "KindName"}: {},
+				{Group: "", Kind: "ConfigMap"}:         {},
+				{Group: "apps", Kind: "Deployment"}:    {},
+				{Group: "groupname", Kind: "KindName"}: {},
 			}
 
 			gkSet := getGroupKinds(spec)

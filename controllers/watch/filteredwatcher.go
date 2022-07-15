@@ -220,6 +220,7 @@ func (w *filteredWatcher) start(resourceVersion string) (bool, error) {
 
 	// We want to avoid situations of hanging watchers. Stop any watchers that
 	// do not receive any events within the timeout window.
+	//nolint:gosec // don't need cryptographic randomness here
 	timeoutSeconds := int64(minWatchTimeout.Seconds() * (rand.Float64() + 1.0))
 	options := metav1.ListOptions{
 		AllowWatchBookmarks: true,
@@ -260,7 +261,7 @@ func errorID(err error) string {
 // in the event to the controller work queue.
 //
 // handle returns the new resource version, whether the event should be ignored,
-// and an error indicating that a watch.Error event type is encounted and the
+// and an error indicating that a watch.Error event type was encountered and the
 // watch should be restarted.
 func (w *filteredWatcher) handle(event watch.Event) (string, bool, error) {
 	var deleted bool

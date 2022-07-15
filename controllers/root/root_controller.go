@@ -54,9 +54,9 @@ type contextKey string
 
 const contextLoggerKey = contextKey("logger")
 
-// reconciler reconciles a ResourceGroup object
+// Reconciler reconciles a ResourceGroup object
 // It only accepts the Create, Update, Delete events of ResourceGroup objects.
-type reconciler struct {
+type Reconciler struct {
 	// cfg is the rest config associated with the reconciler
 	cfg *rest.Config
 
@@ -90,14 +90,14 @@ type reconciler struct {
 // +kubebuilder:rbac:groups=kpt.dev,resources=resourcegroups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch
 
-func (r *reconciler) Reconcile(rootCtx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(rootCtx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.log
 	ctx := context.WithValue(rootCtx, contextLoggerKey, logger)
 	logger.Info("starts reconciling")
 	return r.reconcileKptGroup(ctx, logger, req)
 }
 
-func (r *reconciler) reconcileKptGroup(ctx context.Context, logger logr.Logger, req ctrl.Request) (ctrl.Result, error) {
+func (r *Reconciler) reconcileKptGroup(ctx context.Context, logger logr.Logger, req ctrl.Request) (ctrl.Result, error) {
 	var resgroup = &v1alpha1.ResourceGroup{}
 	err := r.Get(ctx, req.NamespacedName, resgroup)
 	if err != nil {
@@ -118,7 +118,9 @@ func (r *reconciler) reconcileKptGroup(ctx context.Context, logger logr.Logger, 
 		return r.reconcile(ctx, req.NamespacedName, []v1alpha1.ObjMetadata{}, true)
 	}
 
-	resources := append(resgroup.Spec.Resources, v1alpha1.ToObjMetadata(resgroup.Spec.Subgroups)...)
+	resources := make([]v1alpha1.ObjMetadata, 0, len(resgroup.Spec.Resources)+len(resgroup.Spec.Subgroups))
+	resources = append(resources, resgroup.Spec.Resources...)
+	resources = append(resources, v1alpha1.ToObjMetadata(resgroup.Spec.Subgroups)...)
 	if result, err := r.reconcile(ctx, req.NamespacedName, resources, false); err != nil {
 		return result, err
 	}
@@ -130,10 +132,10 @@ func (r *reconciler) reconcileKptGroup(ctx context.Context, logger logr.Logger, 
 	return ctrl.Result{}, nil
 }
 
-func (r *reconciler) reconcile(ctx context.Context, name types.NamespacedName,
+func (r *Reconciler) reconcile(ctx context.Context, name types.NamespacedName,
 	resources []v1alpha1.ObjMetadata, deleteRG bool) (ctrl.Result, error) {
 	gks := r.resMap.Reconcile(ctx, name, resources, deleteRG)
-	if err := r.updateWatches(ctx, name.Name, gks); err != nil {
+	if err := r.updateWatches(ctx, gks); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
@@ -141,7 +143,7 @@ func (r *reconciler) reconcile(ctx context.Context, name types.NamespacedName,
 
 // updateWatches add new watches for GVKs when resgroup includes the first GVK resource(s),
 // and delete watches for GVKs when no resource group includes GVK resources any more.
-func (r *reconciler) updateWatches(ctx context.Context, name string, gks []schema.GroupKind) error {
+func (r *Reconciler) updateWatches(ctx context.Context, gks []schema.GroupKind) error {
 	gvkMap := map[schema.GroupVersionKind]struct{}{}
 	for _, gk := range gks {
 		gvk, found := r.resolver.Resolve(gk)
@@ -152,7 +154,7 @@ func (r *reconciler) updateWatches(ctx context.Context, name string, gks []schem
 	return r.watches.UpdateWatches(ctx, gvkMap)
 }
 
-func (r *reconciler) reconcileDisabledResourceGroup(ctx context.Context, req ctrl.Request, resgroup *v1alpha1.ResourceGroup) (ctrl.Result, error) {
+func (r *Reconciler) reconcileDisabledResourceGroup(ctx context.Context, req ctrl.Request, resgroup *v1alpha1.ResourceGroup) (ctrl.Result, error) {
 	// clean the existing .status field
 	emptyStatus := v1alpha1.ResourceGroupStatus{}
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
@@ -191,7 +193,7 @@ func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 		return err
 	}
 	// Create the reconciler
-	reconciler := &reconciler{
+	reconciler := &Reconciler{
 		Client:   mgr.GetClient(),
 		cfg:      cfg,
 		log:      logger,

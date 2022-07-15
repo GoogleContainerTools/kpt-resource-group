@@ -39,7 +39,7 @@ var c client.Client
 var ctx context.Context
 
 var _ = Describe("Root Reconciler", func() {
-	var reconcilerKpt *reconciler
+	var reconcilerKpt *Reconciler
 	var namespace = metav1.NamespaceDefault
 
 	BeforeEach(func() {
@@ -87,8 +87,8 @@ var _ = Describe("Root Reconciler", func() {
 			err := c.Create(ctx, resourceGroupKpt)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Create triggers an reconcilation,
-			// wait until the reconcilation ends.
+			// Create triggers an reconciliation,
+			// wait until the reconciliation ends.
 			time.Sleep(time.Second)
 			Expect(reconcilerKpt.watches.Len()).Should(Equal(0))
 			Expect(reconcilerKpt.resMap).ShouldNot(BeNil())
@@ -164,7 +164,7 @@ var _ = Describe("Root Reconciler", func() {
 			}
 
 			// The watchmap should be updated correctly
-			for _, r := range []*reconciler{reconcilerKpt} {
+			for _, r := range []*Reconciler{reconcilerKpt} {
 				watched := r.watches.IsWatched(schema.GroupVersionKind{
 					Group: "apps", Version: "v1", Kind: "Deployment"})
 				Expect(watched).Should(Equal(true))
@@ -189,7 +189,6 @@ var _ = Describe("Root Reconciler", func() {
 			// The delete triggers another reconcile
 			// wait until it ends.
 			time.Sleep(2 * time.Second)
-			//Expect(reconcilerKpt.watches.Len()).Should(Equal(0))
 			Expect(reconcilerKpt.resMap).ShouldNot(BeNil())
 
 			// The resmap should be updated correctly

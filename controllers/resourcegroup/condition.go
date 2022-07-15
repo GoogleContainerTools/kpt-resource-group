@@ -56,11 +56,12 @@ func adjustConditionOrder(conditions []v1alpha1.Condition) []v1alpha1.Condition 
 	var reconciling, stalled v1alpha1.Condition
 	var others []v1alpha1.Condition
 	for _, cond := range conditions {
-		if cond.Type == v1alpha1.Reconciling {
+		switch cond.Type {
+		case v1alpha1.Reconciling:
 			reconciling = cond
-		} else if cond.Type == v1alpha1.Stalled {
+		case v1alpha1.Stalled:
 			stalled = cond
-		} else {
+		default:
 			others = append(others, cond)
 		}
 	}

@@ -22,7 +22,7 @@ import (
 	"github.com/go-logr/glogr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -69,7 +69,7 @@ var _ = BeforeSuite(func(done Done) {
 	s := scheme.Scheme
 	err = v1alpha1.AddToScheme(s)
 	Expect(err).NotTo(HaveOccurred())
-	err = v1.AddToScheme(s)
+	err = apiextensionsv1.AddToScheme(s)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
@@ -94,13 +94,13 @@ func StartTestManager(mgr manager.Manager) {
 	}()
 }
 
-func NewReconciler(mgr manager.Manager) (*reconciler, error) {
+func NewReconciler(mgr manager.Manager) (*Reconciler, error) {
 	resmap := resourcemap.NewResourceMap()
 	watches, err := watch.NewManager(mgr.GetConfig(), resmap, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	r := &reconciler{
+	r := &Reconciler{
 		Client:  mgr.GetClient(),
 		cfg:     mgr.GetConfig(),
 		log:     ctrl.Log.WithName("controllers").WithName("Root"),

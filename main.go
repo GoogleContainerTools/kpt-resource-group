@@ -16,6 +16,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/go-logr/logr"
@@ -41,16 +42,22 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-func init() {
+func main() {
+	err := run()
+	if err != nil {
+		setupLog.Error(err, "exiting")
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = v1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 
 	_ = apiextensionsv1.AddToScheme(scheme)
-}
 
-func main() {
 	log.InitFlags()
 
 	var metricsAddr string
@@ -65,15 +72,13 @@ func main() {
 
 	// Register the OpenCensus views
 	if err := ocmetrics.RegisterReconcilerMetricsViews(); err != nil {
-		setupLog.Error(err, "Failed to register OpenCensus views")
-		os.Exit(1)
+		return fmt.Errorf("failed to register OpenCensus views: %w", err)
 	}
 
 	// Register the OC Agent exporter
 	oce, err := ocmetrics.RegisterOCAgentExporter()
 	if err != nil {
-		setupLog.Error(err, "Failed to register the OC Agent exporter")
-		os.Exit(1)
+		return fmt.Errorf("failed to register the OC Agent exporter: %w", err)
 	}
 
 	defer func() {
@@ -89,8 +94,7 @@ func main() {
 		LeaderElectionID:   "413d8c8e.gke.io",
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		return fmt.Errorf("failed to build manager: %w", err)
 	}
 
 	logger := ctrl.Log.WithName("controllers")
@@ -103,9 +107,9 @@ func main() {
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+		return fmt.Errorf("failed to start controller-manager: %w", err)
 	}
+	return nil
 }
 
 func registerControllersForGroup(mgr ctrl.Manager, logger logr.Logger, group string) {

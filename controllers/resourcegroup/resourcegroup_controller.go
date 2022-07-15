@@ -192,7 +192,14 @@ func (r *reconciler) startReconcilingStatus(status v1alpha1.ResourceGroupStatus)
 	return newStatus
 }
 
-func (r *reconciler) endReconcilingStatus(ctx context.Context, id string, namespacedName types.NamespacedName, spec v1alpha1.ResourceGroupSpec, status v1alpha1.ResourceGroupStatus, generation int64) v1alpha1.ResourceGroupStatus {
+func (r *reconciler) endReconcilingStatus(
+	ctx context.Context,
+	id string,
+	namespacedName types.NamespacedName,
+	spec v1alpha1.ResourceGroupSpec,
+	status v1alpha1.ResourceGroupStatus,
+	generation int64,
+) v1alpha1.ResourceGroupStatus {
 	// reset newStatus to make sure the former setting of newStatus does not carry over
 	newStatus := v1alpha1.ResourceGroupStatus{}
 	startTime := time.Now()
@@ -226,11 +233,23 @@ func (r *reconciler) endReconcilingStatus(ctx context.Context, id string, namesp
 	return newStatus
 }
 
-func (r *reconciler) computeResourceStatuses(ctx context.Context, id string, existingStatus v1alpha1.ResourceGroupStatus, metas []v1alpha1.ObjMetadata, nn types.NamespacedName) []v1alpha1.ResourceStatus {
+func (r *reconciler) computeResourceStatuses(
+	ctx context.Context,
+	id string,
+	existingStatus v1alpha1.ResourceGroupStatus,
+	metas []v1alpha1.ObjMetadata,
+	nn types.NamespacedName,
+) []v1alpha1.ResourceStatus {
 	return r.computeStatus(ctx, id, existingStatus, metas, nn, true)
 }
 
-func (r *reconciler) computeSubGroupStatuses(ctx context.Context, id string, existingStatus v1alpha1.ResourceGroupStatus, groupMetas []v1alpha1.GroupMetadata, nn types.NamespacedName) []v1alpha1.GroupStatus {
+func (r *reconciler) computeSubGroupStatuses(
+	ctx context.Context,
+	id string,
+	existingStatus v1alpha1.ResourceGroupStatus,
+	groupMetas []v1alpha1.GroupMetadata,
+	nn types.NamespacedName,
+) []v1alpha1.GroupStatus {
 	objMetadata := v1alpha1.ToObjMetadata(groupMetas)
 	statuses := r.computeStatus(ctx, id, existingStatus, objMetadata, nn, false)
 	return v1alpha1.ToGroupStatuses(statuses)
@@ -248,7 +267,14 @@ func (r *reconciler) getResourceStatus(status v1alpha1.ResourceGroupStatus) map[
 }
 
 // isResource flag indicates if the compute is for resource when true. If false, the compute is for SubGroup (or others).
-func (r *reconciler) computeStatus(ctx context.Context, id string, existingStatus v1alpha1.ResourceGroupStatus, metas []v1alpha1.ObjMetadata, nn types.NamespacedName, isResource bool) []v1alpha1.ResourceStatus {
+func (r *reconciler) computeStatus(
+	ctx context.Context,
+	id string,
+	existingStatus v1alpha1.ResourceGroupStatus,
+	metas []v1alpha1.ObjMetadata,
+	nn types.NamespacedName,
+	isResource bool,
+) []v1alpha1.ResourceStatus {
 	actuationStatuses := r.getResourceStatus(existingStatus)
 	statuses := []v1alpha1.ResourceStatus{}
 	hasErr := false
@@ -409,11 +435,13 @@ func ownershipCondition(id, inv string) *v1alpha1.Condition {
 	if inv != "" {
 		c.Status = v1alpha1.TrueConditionStatus
 		c.Reason = v1alpha1.OwnershipUnmatch
-		c.Message = fmt.Sprintf("This resource is owned by another ResourceGroup %s. The status only reflects the specification for the current object in ResourceGroup %s.", inv, inv)
+		c.Message = fmt.Sprintf("This resource is owned by another ResourceGroup %s. "+
+			"The status only reflects the specification for the current object in ResourceGroup %s.", inv, inv)
 	} else {
 		c.Status = v1alpha1.UnknownConditionStatus
 		c.Reason = v1alpha1.OwnershipEmpty
-		c.Message = "This object is not owned by any inventory object. The status for the current object may not reflect the specification for it in current ResourceGroup."
+		c.Message = "This object is not owned by any inventory object. " +
+			"The status for the current object may not reflect the specification for it in current ResourceGroup."
 	}
 	return c
 }

@@ -129,7 +129,7 @@ type CachedStatus struct {
 // 2) resgroupToResources maps a resource group to its resource set
 // 3) resToStatus maps a resource to its cached status
 // 4) gkToResources maps a GroupKind to its resource set
-// During the reconcilation of a RG in the root controller, the updates to these two maps should be atomic.
+// During the reconciliation of a RG in the root controller, the updates to these two maps should be atomic.
 type ResourceMap struct {
 	// use a lock to make sure that updating resToResgroups and resgroupToResources is atomic
 	lock sync.RWMutex
@@ -253,7 +253,7 @@ func diffResources(oldResources, newResources []resource) (toAdd, toDelete []res
 func (m *ResourceMap) HasResource(res resource) bool {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
-	_, ok := m.resToResgroups[resource(res)]
+	_, ok := m.resToResgroups[res]
 	return ok
 }
 
@@ -269,7 +269,7 @@ func (m *ResourceMap) HasResgroup(group types.NamespacedName) bool {
 func (m *ResourceMap) Get(res resource) []types.NamespacedName {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
-	if v, ok := m.resToResgroups[resource(res)]; ok {
+	if v, ok := m.resToResgroups[res]; ok {
 		return v.toSlice()
 	}
 	return []types.NamespacedName{}
@@ -319,7 +319,7 @@ func (m *ResourceMap) IsEmpty() bool {
 	return len(m.resgroupToResources) == 0 && len(m.resToResgroups) == 0
 }
 
-// NewResourceMap initalizes an empty ReverseMap
+// NewResourceMap initializes an empty ReverseMap
 func NewResourceMap() *ResourceMap {
 	return &ResourceMap{
 		resToResgroups:      make(map[resource]*resourceGroupSet),

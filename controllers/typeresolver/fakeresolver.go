@@ -21,31 +21,31 @@ import (
 func FakeResolver() *TypeResolver {
 	return &TypeResolver{
 		typeMapping: map[schema.GroupKind]schema.GroupVersionKind{
-			schema.GroupKind{
+			{
 				Group: "apps",
 				Kind:  "Deployment",
-			}: schema.GroupVersionKind{
+			}: {
 				Group:   "apps",
 				Version: "v1",
 				Kind:    "Deployment",
 			},
-			schema.GroupKind{
+			{
 				Group: "apps",
 				Kind:  "StatefulSet",
-			}: schema.GroupVersionKind{
+			}: {
 				Group:   "apps",
 				Version: "v1",
 				Kind:    "StatefulSet",
 			},
-			schema.GroupKind{
+			{
 				Group: "apps",
 				Kind:  "DaemonSet",
-			}: schema.GroupVersionKind{
+			}: {
 				Group:   "apps",
 				Version: "v1",
 				Kind:    "DaemonSet",
 			},
-			schema.GroupKind{
+			{
 				Group: "",
 				Kind:  "ConfigMap",
 			}: {

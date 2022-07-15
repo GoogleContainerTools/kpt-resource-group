@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"net/http"
 
-	// Empty import as required by pprof
+	//nolint:gosec // pprof init() registers handlers, which we serve with ListenAndServe
 	_ "net/http/pprof"
 
 	"k8s.io/klog/v2"

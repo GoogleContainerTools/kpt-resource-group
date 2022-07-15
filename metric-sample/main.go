@@ -22,7 +22,6 @@ import (
 	"github.com/go-logr/glogr"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/resourcegroup/controllers/metrics"
-	ocmetrics "kpt.dev/resourcegroup/controllers/metrics"
 )
 
 var (
@@ -31,13 +30,13 @@ var (
 
 func main() {
 	// Register the OpenCensus views
-	if err := ocmetrics.RegisterReconcilerMetricsViews(); err != nil {
+	if err := metrics.RegisterReconcilerMetricsViews(); err != nil {
 		logger.Error(err, "Failed to register OpenCensus views")
 		os.Exit(1)
 	}
 
 	// Register the OC Agent exporter
-	oce, err := ocmetrics.RegisterOCAgentExporter()
+	oce, err := metrics.RegisterOCAgentExporter()
 	if err != nil {
 		logger.Error(err, "Failed to register the OC Agent exporter")
 		os.Exit(1)
@@ -54,7 +53,6 @@ func main() {
 		time.Sleep(1 * time.Second)
 		setMetrics(now)
 	}
-
 }
 
 func setMetrics(start time.Time) {

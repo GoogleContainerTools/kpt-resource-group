@@ -124,7 +124,7 @@ type Link struct {
 	Description string `json:"description"`
 
 	// url is the URL of the link
-	Url string `json:"url"`
+	URL string `json:"url"`
 }
 
 type Condition struct {
@@ -285,6 +285,7 @@ type ResourceGroupList struct {
 	Items           []ResourceGroup `json:"items"`
 }
 
+//nolint:gochecknoinits // kubebuilder convention for api packages
 func init() {
 	SchemeBuilder.Register(&ResourceGroup{}, &ResourceGroupList{})
 }

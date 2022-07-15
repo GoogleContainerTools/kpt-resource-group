@@ -17,7 +17,7 @@ package e2e
 import (
 	"context"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,7 +37,7 @@ var obj = map[string]interface{}{
 func createKCCResource(kubeClient client.Client) v1alpha1.ObjMetadata {
 	kccResource := &unstructured.Unstructured{Object: obj}
 	err := kubeClient.Create(context.TODO(), kccResource)
-	Expect(err).NotTo(HaveOccurred(), "Failed to create kcc resource %v", err)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create kcc resource %v", err)
 	gk := kccResource.GroupVersionKind().GroupKind()
 	return v1alpha1.ObjMetadata{
 		GroupKind: v1alpha1.GroupKind{
@@ -53,7 +53,7 @@ func deleteKCCResource(kubeClient client.Client) {
 	kccResource := &unstructured.Unstructured{Object: obj}
 	err := kubeClient.Delete(context.TODO(), kccResource)
 	if err != nil {
-		Expect(errors.IsNotFound(err)).Should(Equal(true))
+		gomega.Expect(errors.IsNotFound(err)).Should(gomega.Equal(true))
 	}
 }
 

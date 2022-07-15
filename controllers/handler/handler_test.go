@@ -53,7 +53,6 @@ func (m fakeMapping) Get(gknn v1alpha1.ObjMetadata) []types.NamespacedName {
 			Namespace: "namespace2",
 		},
 	}
-
 }
 
 func (m fakeMapping) GetResources(_ schema.GroupKind) []v1alpha1.ObjMetadata {
@@ -125,7 +124,7 @@ var _ = Describe("Util tests", func() {
 			for i := 1; i <= 4; i++ {
 				e := <-ch
 				name := e.Object.GetName()
-				names[name] += 1
+				names[name]++
 			}
 
 			Expect(names["name1"]).Should(Equal(1))

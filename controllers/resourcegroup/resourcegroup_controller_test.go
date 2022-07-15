@@ -102,11 +102,11 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			verifyClusterResourceGroup(updatedResgroupKpt, 1, 0, v1alpha1.ResourceGroupStatus{})
 
-			// Push an event to the channel, which will cause trigger a reconcilation for resgroup
+			// Push an event to the channel, which will cause trigger a reconciliation for resgroup
 			channelKpt <- event.GenericEvent{Object: resgroupKpt}
 			time.Sleep(5 * time.Second)
 
-			// Verify that the reconcilation modifies the ResourceGroupStatus field correctly
+			// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
 			err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
 			Expect(err).ShouldNot(HaveOccurred())
 			expectedStatus := v1alpha1.ResourceGroupStatus{
@@ -146,7 +146,7 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 			channelKpt <- event.GenericEvent{Object: resgroupKpt}
 			time.Sleep(5 * time.Second)
 
-			// Verify that the reconcilation modifies the ResourceGroupStatus field correctly
+			// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
 			err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
 			Expect(err).ShouldNot(HaveOccurred())
 			expectedStatus = v1alpha1.ResourceGroupStatus{
@@ -217,7 +217,7 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 			channelKpt <- event.GenericEvent{Object: resgroupKpt}
 			time.Sleep(5 * time.Second)
 
-			// Verify that the reconcilation modifies the ResourceGroupStatus field correctly
+			// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
 			err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
 			Expect(err).ShouldNot(HaveOccurred())
 			expectedStatus = v1alpha1.ResourceGroupStatus{
@@ -265,7 +265,7 @@ var _ = Describe("ResourceGroup Reconciler", func() {
 			channelKpt <- event.GenericEvent{Object: resgroupKpt}
 			time.Sleep(5 * time.Second)
 
-			// Verify that the reconcilation modifies the ResourceGroupStatus field correctly
+			// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
 			err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
 			Expect(err).ShouldNot(HaveOccurred())
 			expectedStatus = v1alpha1.ResourceGroupStatus{

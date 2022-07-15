@@ -22,15 +22,15 @@ import (
 )
 
 const (
-	rg_resource_namespace_name = "resource-group-system"
-	rg_resource_pod_name       = "resource-group-controller-manager"
+	resourceGroupSystemNamespace = "resource-group-system"
+	resourceGroupDeploymentName  = "resource-group-controller-manager"
 )
 
 // RegisterOCAgentExporter creates the OC Agent metrics exporter.
 func RegisterOCAgentExporter() (*ocagent.Exporter, error) {
 	err := os.Setenv(
 		"OC_RESOURCE_LABELS",
-		"k8s.namespace.name=\""+rg_resource_namespace_name+"\",k8s.pod.name=\""+rg_resource_pod_name+"\"")
+		"k8s.namespace.name=\""+resourceGroupSystemNamespace+"\",k8s.pod.name=\""+resourceGroupDeploymentName+"\"")
 	if err != nil {
 		return nil, err
 	}

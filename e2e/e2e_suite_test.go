@@ -54,8 +54,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	clientSet, err = newClientSet(config)
 	Expect(err).NotTo(HaveOccurred())
-	mapper, err = newRESTMapper(clientSet)
-	Expect(err).NotTo(HaveOccurred())
+	mapper = newRESTMapper(clientSet)
 	kubeClient, err = newKubeClient(config, mapper)
 	Expect(err).NotTo(HaveOccurred())
 

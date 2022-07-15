@@ -154,9 +154,9 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Delete resource group")
-		deleteResourceGroup(kubeClient, rgname, root.KptGroup)
+		deleteResourceGroup(kubeClient, rgname)
 		By("Delete subgroup ")
-		deleteResourceGroup(kubeClient, subGroupName, root.KptGroup)
+		deleteResourceGroup(kubeClient, subGroupName)
 
 		By("The resource-group-controller pod doesn't get restarted")
 		err = controllerPodsNoRestart(clientSet)
@@ -190,6 +190,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Randomly delete one ConfigMap from 1000 ConfigMaps")
+		//nolint:gosec // doesn't need to be cryptographically random
 		index := rand.Intn(1000)
 		deleteResources(kubeClient, []v1alpha1.ObjMetadata{resources[index-1]})
 		expectedStatus.ResourceStatuses[index-1].Status = v1alpha1.NotFound
@@ -210,7 +211,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Delete resource group")
-		deleteResourceGroup(kubeClient, rgname, root.KptGroup)
+		deleteResourceGroup(kubeClient, rgname)
 
 		By("The resource-group-controller pod doesn't get restarted")
 		err = controllerPodsNoRestart(clientSet)
@@ -230,7 +231,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		}
 
 		By("Apply the v1beta1 CRD for ResourceGroup")
-		err = RunMake("apply-v1beta1-crd")
+		err = runMake("apply-v1beta1-crd")
 		Expect(err).NotTo(HaveOccurred(), "failed to apply v1beta1 ResourceGroup CRD: %v", err)
 
 		By("Wait for the CRD to be ready")
@@ -240,7 +241,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		mapper.Reset()
 
 		By("Apply a ResourceGroup CR")
-		rgname := "crd-version"
+		rgname := "crd-version-1"
 		rg := newKptResourceGroup(kubeClient, rgname, rgname)
 
 		By("We can get the applied ResourceGroup CR")
@@ -262,7 +263,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		}
 
 		By("Apply the v1 CRD for ResourceGroup")
-		err = RunMake("apply-v1-crd")
+		err = runMake("apply-v1-crd")
 		Expect(err).NotTo(HaveOccurred(), "failed to apply v1 ResourceGroup CRD: %v", err)
 
 		By("Wait for the v1 CRD to be ready")
@@ -272,7 +273,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		mapper.Reset()
 
 		By("Apply a ResourceGroup CR")
-		rgname := "crd-version"
+		rgname := "crd-version-2"
 		rg := newKptResourceGroup(kubeClient, rgname, rgname)
 
 		By("We can get the applied ResourceGroup CR")
@@ -297,7 +298,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		}
 
 		By("Apply the v1beta1 CRD for ResourceGroup")
-		err = RunMake("apply-v1beta1-crd")
+		err = runMake("apply-v1beta1-crd")
 		Expect(err).NotTo(HaveOccurred(), "failed to apply v1beta1 ResourceGroup CRD: %v", err)
 
 		By("Wait for the CRD to be ready")
@@ -307,11 +308,11 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		mapper.Reset()
 
 		By("Apply a ResourceGroup CR")
-		rgname := "crd-version"
+		rgname := "crd-version-3"
 		rg := newKptResourceGroup(kubeClient, rgname, rgname)
 
 		By("Apply the v1 CRD for ResourceGroup")
-		err = RunMake("apply-v1-crd")
+		err = runMake("apply-v1-crd")
 		Expect(err).NotTo(HaveOccurred(), "failed to apply v1 ResourceGroup CRD: %v", err)
 
 		By("Wait for the v1 CRD to be ready")
@@ -364,7 +365,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		waitForResourceGroupStatus(kubeClient, expectedStatus, rgname)
 
 		By("Delete the resourcegroup")
-		deleteResourceGroup(kubeClient, rgname, root.KptGroup)
+		deleteResourceGroup(kubeClient, rgname)
 	})
 
 	It("Test CustomResource", func() {
@@ -683,7 +684,7 @@ var _ = Describe("ResourceGroup Controller e2e test", func() {
 		Expect(resourceVersionAfter).To(BeIdenticalTo(resourceVersionBefore))
 
 		By("Delete resource group")
-		deleteResourceGroup(kubeClient, rgname, root.KptGroup)
+		deleteResourceGroup(kubeClient, rgname)
 
 		By("The resource-group-controller pod doesn't get restarted")
 		err = controllerPodsNoRestart(clientSet)
@@ -707,7 +708,7 @@ func newKptResourceGroup(kubeClient client.Client, name, id string) *v1alpha1.Re
 	return rg
 }
 
-func deleteResourceGroup(kubeClient client.Client, name, group string) {
+func deleteResourceGroup(kubeClient client.Client, name string) {
 	rg := &v1alpha1.ResourceGroup{}
 	rg.SetNamespace(testNamespace)
 	rg.SetName(name)
@@ -853,6 +854,7 @@ func makeStatusForNConfigMap(n int, s v1alpha1.Status) []v1alpha1.ResourceStatus
 	return resourceStatus
 }
 
+//nolint:unparam
 func getResourceVersion(kubeClient client.Client, name string) (string, error) {
 	rg := &v1alpha1.ResourceGroup{}
 	err := kubeClient.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: testNamespace}, rg)
@@ -1054,7 +1056,8 @@ func controllerPodsNoRestart(clientSet *kubernetes.Clientset) error {
 	return nil
 }
 
-func RunMake(target string) error {
+func runMake(target string) error {
+	//nolint:gosec // all usages use hard-coded strings as input
 	cmd := exec.Command("bash", "-c", fmt.Sprintf("make %s", target))
 	cmd.Env = os.Environ()
 	wd, err := os.Getwd()
@@ -1074,7 +1077,8 @@ func GetLogs() ([]byte, error) {
 func applyTestFile(file string) error {
 	wd, err := os.Getwd()
 	Expect(err).ShouldNot(HaveOccurred())
-	cmd := exec.Command("bash", "-c", fmt.Sprintf("kubectl apply -f %s", file))
+	//nolint:gosec // all usages use hard-coded strings as input
+	cmd := exec.Command("bash", "-c", fmt.Sprintf("kubectl apply -f \"%s\"", file))
 	cmd.Env = os.Environ()
 	cmd.Dir = wd
 	output, err := cmd.Output()

@@ -35,10 +35,9 @@ func newClientSet(config *rest.Config) (*kubernetes.Clientset, error) {
 	return kubernetes.NewForConfig(config)
 }
 
-func newRESTMapper(clientSet *kubernetes.Clientset) (meta.ResettableRESTMapper, error) {
+func newRESTMapper(clientSet *kubernetes.Clientset) meta.ResettableRESTMapper {
 	discoveryClient := memory.NewMemCacheClient(clientSet.Discovery())
-	mapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
-	return mapper, nil
+	return restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
 }
 
 func newKubeClient(config *rest.Config, mapper meta.RESTMapper) (client.Client, error) {
