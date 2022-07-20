@@ -27,9 +27,9 @@ spec:
         - --metrics-addr=127.0.0.1:8080
         - --enable-leader-election
       - name: otel-agent
-        image: gcr.io/config-management-release/otelcontribcol:v0.38.0
+        image: gcr.io/config-management-release/otelcontribcol:v0.54.0
         command:
-        - /otelcontribcol
+        - /otelcol-contrib
         args:
         - "--config=/conf/otel-agent-config.yaml"
         resources:
