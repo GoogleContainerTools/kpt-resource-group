@@ -18,56 +18,86 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/GoogleContainerTools/kpt/pkg/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
+	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 	"kpt.dev/resourcegroup/controllers/resourcemap"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
-	"sigs.k8s.io/yaml"
-
-	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 )
 
 const (
 	owningInventoryKey      = "config.k8s.io/owning-inventory"
 	SourceHashAnnotationKey = "configmanagement.gke.io/token"
+	ArgoGroup               = "argoproj.io"
+	Rollout                 = "Rollout"
+	Degraded                = "Degraded"
+	Failed                  = "Failed"
+	Healthy                 = "Healthy"
+	Paused                  = "Paused"
+	Progressing             = "Progressing"
 )
+
+type RGStatusReader interface {
+	Supports(gk schema.GroupKind) bool
+	Compute(obj *unstructured.Unstructured) (*kstatus.Result, error)
+}
+
+type RGDefaultStatusReader struct{}
+
+var _ RGStatusReader = &RGDefaultStatusReader{}
+
+func (rgs *RGDefaultStatusReader) Supports(gk schema.GroupKind) bool {
+	return true
+}
+
+func (rgs *RGDefaultStatusReader) Compute(obj *unstructured.Unstructured) (*kstatus.Result, error) {
+	return kstatus.Compute(obj)
+}
+
+type RGDelegateStatusReader struct {
+	rgStatusReaders []RGStatusReader
+}
+
+var _ RGStatusReader = &RGDelegateStatusReader{}
+
+func NewRGDelegateStatusReader() *RGDelegateStatusReader {
+	return &RGDelegateStatusReader{
+		rgStatusReaders: []RGStatusReader{
+			// if more customized readers needed, add them before the default one
+			// rollout
+			&status.RolloutStatusReader{},
+			// config connector
+			&status.ConfigConnectorStatusReader{},
+			// default
+			&RGDefaultStatusReader{},
+		},
+	}
+}
+
+func (rgs *RGDelegateStatusReader) Supports(_ schema.GroupKind) bool {
+	return true
+}
+
+func (rgs *RGDelegateStatusReader) Compute(obj *unstructured.Unstructured) (*kstatus.Result, error) {
+	for _, reader := range rgs.rgStatusReaders {
+		if reader.Supports(obj.GroupVersionKind().GroupKind()) {
+			return reader.Compute(obj)
+		}
+	}
+	// this should not be reached
+	return nil, fmt.Errorf("no readers support this GroupKind")
+}
 
 // ComputeStatus computes the status and conditions that should be
 // saved in the memory.
 func ComputeStatus(obj *unstructured.Unstructured) *resourcemap.CachedStatus {
 	resStatus := &resourcemap.CachedStatus{}
 
-	// get the resource status using the kstatus library
-	result, err := kstatus.Compute(obj)
-	if err != nil || result == nil {
-		resStatus.Status = v1alpha1.Unknown
-	}
-	if err != nil {
-		klog.Errorf("kstatus.Compute for %v failed: %v", obj, err)
-	}
-	if err != nil || result == nil {
-		resStatus.Status = v1alpha1.Unknown
-		return resStatus
-	}
-
-	resStatus.Status = v1alpha1.Status(result.Status)
-	if resStatus.Status == v1alpha1.Failed {
-		resStatus.Conditions = ConvertKstatusConditions(result.Conditions)
-	} else if IsCNRMResource(obj.GroupVersionKind().Group) && resStatus.Status != v1alpha1.Current {
-		// Special handling for KCC resources.
-		// It should be removed after KCC resources implement the stalled conditions.
-		// go/timeout-fail-fast-kpt
-		conditions, cErr := ReadKCCResourceConditions(obj)
-		if cErr != nil {
-			klog.Errorf(cErr.Error())
-			// fallback to use the kstatus conditions for this resource.
-			resStatus.Conditions = ConvertKstatusConditions(result.Conditions)
-		} else {
-			resStatus.Conditions = conditions
-		}
-	}
-
+	// get the hash and the inventory ID at
+	// the beginning to prevent ownership error
 	hash := GetSourceHash(obj.GetAnnotations())
 	if hash != "" {
 		resStatus.SourceHash = hash
@@ -75,6 +105,21 @@ func ComputeStatus(obj *unstructured.Unstructured) *resourcemap.CachedStatus {
 	// get the inventory ID.
 	inv := getOwningInventory(obj.GetAnnotations())
 	resStatus.InventoryID = inv
+
+	rgStatusReaders := NewRGDelegateStatusReader()
+	result, err := rgStatusReaders.Compute(obj)
+	if err != nil {
+		klog.Errorf("Compute for %v failed: %v", obj, err)
+	}
+	if err != nil || result == nil {
+		resStatus.Status = v1alpha1.Unknown
+		return resStatus
+	}
+
+	resStatus.Status = v1alpha1.Status(result.Status)
+	if resStatus.Status == v1alpha1.Failed || (IsCNRMResource(obj.GroupVersionKind().Group) && resStatus.Status != v1alpha1.Current) {
+		resStatus.Conditions = ConvertKstatusConditions(result.Conditions)
+	}
 	return resStatus
 }
 
@@ -107,24 +152,6 @@ func convertKstatusCondition(kstatusCond kstatus.Condition) v1alpha1.Condition {
 // IsCNRMResource checks if a group is for a CNRM resource.
 func IsCNRMResource(group string) bool {
 	return strings.HasSuffix(group, "cnrm.cloud.google.com")
-}
-
-// ReadKCCResourceConditions reads the status.conditions from a KCC object.
-func ReadKCCResourceConditions(obj *unstructured.Unstructured) ([]v1alpha1.Condition, error) {
-	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
-	if err != nil {
-		return nil, fmt.Errorf("failed to find .stauts.conditions for %s/%s: %v", obj.GetNamespace(), obj.GetName(), err)
-	}
-	if !found {
-		return nil, fmt.Errorf("failed to find .stauts.conditions for %s/%s", obj.GetNamespace(), obj.GetName())
-	}
-	data, err := yaml.Marshal(conditions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal conditions for %s/%s", obj.GetNamespace(), obj.GetName())
-	}
-	results := make([]v1alpha1.Condition, len(conditions))
-	err = yaml.Unmarshal(data, &results)
-	return results, err
 }
 
 // GetSourceHash returns the source hash that is defined in the
