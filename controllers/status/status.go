@@ -57,7 +57,6 @@ func ComputeStatus(obj *unstructured.Unstructured) *resourcemap.CachedStatus {
 	} else if IsCNRMResource(obj.GroupVersionKind().Group) && resStatus.Status != v1alpha1.Current {
 		// Special handling for KCC resources.
 		// It should be removed after KCC resources implement the stalled conditions.
-		// go/timeout-fail-fast-kpt
 		conditions, cErr := ReadKCCResourceConditions(obj)
 		if cErr != nil {
 			klog.Errorf(cErr.Error())
