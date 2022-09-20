@@ -39,4 +39,9 @@ var (
 
 	// KeyComponent groups metrics by their component. Possible value: readiness
 	KeyComponent, _ = tag.NewKey("component")
+
+	// ResourceKeyDeploymentName groups metrics by k8s deployment name.
+	// This metric tag is populated from the k8s.deployment.name resource
+	// attribute for Prometheus using the resource_to_telemetry_conversion feature.
+	ResourceKeyDeploymentName, _ = tag.NewKey("k8s_deployment_name")
 )
