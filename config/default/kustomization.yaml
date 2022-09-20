@@ -87,3 +87,22 @@ vars:
 #    kind: Service
 #    version: v1
 #    name: webhook-service
+
+replacements:
+# Specify a unique label for deployment pods.
+# This enables use of kubectl logs with a deployment selector.
+# The label is also used by the downward API to inject the deployment name as an
+# env var for use as a metrics resource attribute.
+- source:
+    kind: Deployment
+    name: controller-manager
+    fieldPath: metadata.name
+  targets:
+  - select:
+      kind: Deployment
+      name: controller-manager
+    fieldPaths:
+    - spec.selector.matchLabels.configsync\.gke\.io/deployment-name
+    - spec.template.metadata.labels.configsync\.gke\.io/deployment-name
+    options:
+      create: true

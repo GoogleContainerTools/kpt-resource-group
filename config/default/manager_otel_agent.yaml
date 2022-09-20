@@ -16,16 +16,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: controller-manager
+  name: controller-manager # value replaced by kustomize
   namespace: system
 spec:
+  selector:
+    matchLabels:
+      configsync.gke.io/deployment-name: controller-manager # value replaced by kustomize
   template:
+    metadata:
+      labels:
+        configsync.gke.io/deployment-name: controller-manager # value replaced by kustomize
     spec:
       containers:
       - name: manager
         args:
         - --metrics-addr=127.0.0.1:8080
         - --enable-leader-election
+        # The OC_RESOURCE_LABELS env var configures container-specific resource
+        # attributes for the OpenCensus metrics exporter.
+        env:
+        - name: OC_RESOURCE_LABELS
+          value: 'k8s.container.name="manager"'
       - name: otel-agent
         image: gcr.io/config-management-release/otelcontribcol:v0.54.0
         command:
@@ -55,6 +66,48 @@ spec:
           runAsUser: 1000
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
+        # These KUBE env vars help populate OTEL_RESOURCE_ATTRIBUTES which
+        # is used by the otel-agent to populate resource attributes when
+        # emiting metrics to the otel-collector. This is more efficient than
+        # having the otel-collector look them up from the apiserver.
+        env:
+        - name: KUBE_POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: KUBE_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: KUBE_POD_UID
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.uid
+        - name: KUBE_POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        - name: KUBE_NODE_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        - name: KUBE_DEPLOYMENT_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.labels['configsync.gke.io/deployment-name']
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "k8s.pod.name=$(KUBE_POD_NAME),\
+            k8s.pod.namespace=$(KUBE_POD_NAMESPACE),\
+            k8s.pod.uid=$(KUBE_POD_UID),\
+            k8s.pod.ip=$(KUBE_POD_IP),\
+            k8s.node.name=$(KUBE_NODE_NAME),\
+            k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME)"
       volumes:
       - name: otel-agent-config-vol
         configMap:
