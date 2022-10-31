@@ -37,14 +37,11 @@ func RegisterReconcilerMetricsViews() error {
 	return view.Register(
 		ReconcileDurationView,
 		ResourceGroupTotalView,
-		ResourceTotalView,
 		ResourceCountView,
-		ReadyResourceTotalView,
 		ReadyResourceCountView,
 		NamespaceCountView,
 		ClusterScopedResourceCountView,
 		CRDCountView,
-		KCCResourceTotalView,
 		KCCResourceCountView,
 		PipelineErrorView,
 	)

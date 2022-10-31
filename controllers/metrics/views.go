@@ -37,14 +37,6 @@ var (
 		Aggregation: view.LastValue(),
 	}
 
-	// ResourceTotalView aggregates the ResourceTotal metric measurements.
-	ResourceTotalView = &view.View{
-		Name:        ResourceCount.Name() + "_total",
-		Measure:     ResourceCount,
-		Description: "The total number of resources tracked by all ResourceGroup CRs in the cluster",
-		Aggregation: view.Sum(),
-	}
-
 	// ResourceCountView aggregates the ResourceCount metric measurements.
 	ResourceCountView = &view.View{
 		Name:        ResourceCount.Name(),
@@ -52,14 +44,6 @@ var (
 		Description: "The total number of resources tracked by a ResourceGroup",
 		TagKeys:     []tag.Key{KeyResourceGroup},
 		Aggregation: view.LastValue(),
-	}
-
-	// ReadyResourceTotalView aggregates the ready resource count across all ResourceGroups
-	ReadyResourceTotalView = &view.View{
-		Name:        ReadyResourceCount.Name() + "_total",
-		Measure:     ReadyResourceCount,
-		Description: "The total number of resources ready across all ResourceGroup CRs in the cluster",
-		Aggregation: view.Sum(),
 	}
 
 	// ReadyResourceCountView aggregates the resources ready in a ResourceGroup
@@ -96,14 +80,6 @@ var (
 		Description: "The number of CRDs in a ResourceGroup",
 		TagKeys:     []tag.Key{KeyResourceGroup},
 		Aggregation: view.LastValue(),
-	}
-
-	// KCCResourceTotalView aggregates the KCC resource count across all ResourceGroups
-	KCCResourceTotalView = &view.View{
-		Name:        KCCResourceCount.Name() + "_total",
-		Measure:     KCCResourceCount,
-		Description: "The total number of KCC resources across all ResourceGroup CRs in the cluster",
-		Aggregation: view.Sum(),
 	}
 
 	// KCCResourceCountView aggregates the KCC resources in a ResourceGroup
