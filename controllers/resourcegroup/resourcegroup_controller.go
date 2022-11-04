@@ -23,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -291,8 +292,16 @@ func (r *reconciler) computeStatus(
 			r.log.V(4).Info("found the cached resource status for", "namespace", res.Namespace, "name", res.Name)
 			setResStatus(id, &resStatus, cachedStatus)
 		default:
-			resObj := &unstructured.Unstructured{}
-			gvk, _ := r.resolver.Resolve(schema.GroupKind(res.GroupKind))
+			resObj := new(unstructured.Unstructured)
+			gvk, gvkFound := r.resolver.Resolve(schema.GroupKind(res.GroupKind))
+			if !gvkFound {
+				// If the resolver cache does not contain the server preferred GVK, then GVK returned
+				// will be empty resulting in a GET error. An instance of this occurring is when the
+				// resource type (CRD) does not exist.
+				r.log.V(4).Info("unable to get object from API server to compute status as resource does not exist", "namespace", res.Namespace, "name", res.Name)
+				resStatus.Status = v1alpha1.NotFound
+				break
+			}
 			resObj.SetGroupVersionKind(gvk)
 			r.log.Info("get the object from API server to compute status for", "namespace", res.Namespace, "name", res.Name)
 			err := r.Get(ctx, types.NamespacedName{
@@ -300,7 +309,13 @@ func (r *reconciler) computeStatus(
 				Name:      res.Name,
 			}, resObj)
 			if err != nil {
-				resStatus.Status = v1alpha1.NotFound
+				if errors.IsNotFound(err) || meta.IsNoMatchError(err) {
+					resStatus.Status = v1alpha1.NotFound
+				} else {
+					resStatus.Status = v1alpha1.Unknown
+				}
+				r.log.V(4).Error(err, "unable to get object from API server to compute status", "namespace", res.Namespace, "name", res.Name)
+
 				break // Breaks out of switch statement, not the loop.
 			}
 			// get the resource status using the kstatus library
