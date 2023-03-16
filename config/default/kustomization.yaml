@@ -58,6 +58,12 @@ patchesStrategicMerge:
 # 'CERTMANAGER' needs to be enabled to use ca injection
 #- webhookcainjection_patch.yaml
 
+patches:
+- target: {}
+  path: remove_creationtimestamp_field_patch.yaml
+- target: {}
+  path: remove_status_field_patch.yaml
+
 # the following config is for teaching kustomize how to do var substitution
 vars:
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
