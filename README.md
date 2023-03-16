@@ -7,7 +7,7 @@ status.
 ## Contributing
 
 If you are interested in contributing please start with
-[contribution guidelines](docs/CONTRIBUTING.md).
+[contribution guidelines](docs/contributing.md).
 
 ## Local Development
 
