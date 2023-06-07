@@ -1,6 +1,6 @@
 module kpt.dev/resourcegroup
 
-go 1.17
+go 1.19
 
 require (
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0
