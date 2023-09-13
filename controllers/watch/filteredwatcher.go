@@ -149,7 +149,7 @@ func waitUntilNextRetry(retries int) {
 // Run reads the event from the base watch interface,
 // filters the event and pushes the object contained
 // in the event to the controller work queue.
-func (w *filteredWatcher) Run(ctx context.Context) error {
+func (w *filteredWatcher) Run(context.Context) error {
 	klog.Infof("Watch started for %s", w.gvk)
 	var resourceVersion string
 	var retriesForWatchError int

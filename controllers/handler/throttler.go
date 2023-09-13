@@ -51,15 +51,15 @@ func NewThrottler(d time.Duration) *Throttler {
 }
 
 // Create implements EventHandler. All create events are ignored.
-func (e *Throttler) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (e *Throttler) Create(event.CreateEvent, workqueue.RateLimitingInterface) {
 }
 
 // Update implements EventHandler. All update events are ignored.
-func (e *Throttler) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+func (e *Throttler) Update(event.UpdateEvent, workqueue.RateLimitingInterface) {
 }
 
 // Delete implements EventHandler. All delete events are ignored.
-func (e *Throttler) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+func (e *Throttler) Delete(event.DeleteEvent, workqueue.RateLimitingInterface) {
 }
 
 // Generic implements EventHandler.

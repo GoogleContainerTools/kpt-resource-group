@@ -229,7 +229,7 @@ type NoGenericEventPredicate struct {
 }
 
 // Generic skips all generic events
-func (NoGenericEventPredicate) Generic(e event.GenericEvent) bool {
+func (NoGenericEventPredicate) Generic(event.GenericEvent) bool {
 	return false
 }
 

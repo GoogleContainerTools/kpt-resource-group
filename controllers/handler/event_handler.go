@@ -58,7 +58,7 @@ func (e *EnqueueEventToChannel) OnAdd(obj interface{}) {
 }
 
 // Update implements EventHandler
-func (e *EnqueueEventToChannel) OnUpdate(oldObj, newObj interface{}) {
+func (e *EnqueueEventToChannel) OnUpdate(_, newObj interface{}) {
 	e.Log.V(5).Info("received an update event")
 	e.enqueueEvent(newObj)
 }

@@ -34,6 +34,10 @@ const (
 	RepoSyncName = "repo-sync"
 	// RootSyncName is the expected name of any RootSync CR.
 	RootSyncName = "root-sync"
+
+	//nolint:gosec // ignore the false-positive alert for G101: Potential hardcoded credentials
+	// CMSNamespace is the name of the Config Sync controller's namespace
+	CMSNamespace = "config-management-system"
 )
 
 // RecordReconcileDuration produces a measurement for the ReconcileDuration view.
@@ -108,7 +112,7 @@ func RecordPipelineError(ctx context.Context, nn types.NamespacedName, component
 
 // ComputeReconcilerName computes the reconciler name from the ResourceGroup CR name
 func ComputeReconcilerNameType(nn types.NamespacedName) (reconcilerName, reconcilerType string) {
-	if nn.Namespace == "config-management-system" {
+	if nn.Namespace == CMSNamespace {
 		if nn.Name == RootSyncName {
 			return RootReconcilerPrefix, RootSyncName
 		}

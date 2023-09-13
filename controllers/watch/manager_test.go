@@ -37,7 +37,7 @@ func fakeRunnable(ctx context.Context) Runnable {
 }
 
 func fakeError(gvk schema.GroupVersionKind) error {
-	return errors.New("failed")
+	return errors.Errorf("failed error for %q", gvk)
 }
 
 func testRunnables(_ context.Context, errOnType map[schema.GroupVersionKind]bool) func(context.Context, watcherConfig) (Runnable, error) {

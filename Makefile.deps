@@ -30,7 +30,7 @@ CONTROLLER_GEN := $(GOBIN)/controller-gen
 ADDLICENSE_VERSION := v1.0.0
 ADDLICENSE := $(GOBIN)/addlicense
 
-GOLINT_VERSION := v1.46.2
+GOLINT_VERSION := v1.54.2
 GOLINT := $(GOBIN)/golangci-lint
 
 KIND_VERSION := v0.14.0

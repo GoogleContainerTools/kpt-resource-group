@@ -21,6 +21,7 @@ import (
 
 	//nolint:gosec // pprof init() registers handlers, which we serve with ListenAndServe
 	_ "net/http/pprof"
+	"time"
 
 	"k8s.io/klog/v2"
 )
@@ -34,7 +35,11 @@ func Service() {
 		go func() {
 			klog.Infof("Starting profiling on port %d", *profilerPort)
 			addr := fmt.Sprintf(":%d", *profilerPort)
-			err := http.ListenAndServe(addr, nil)
+			server := &http.Server{
+				Addr:              addr,
+				ReadHeaderTimeout: 30 * time.Second,
+			}
+			err := server.ListenAndServe()
 			if err != nil {
 				klog.Fatalf("Profiler server failed to start: %+v", err)
 			}

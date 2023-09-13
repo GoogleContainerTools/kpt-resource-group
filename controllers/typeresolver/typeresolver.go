@@ -73,7 +73,7 @@ func (r *TypeResolver) Resolve(gk schema.GroupKind) (schema.GroupVersionKind, bo
 
 // +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
-func (r *TypeResolver) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *TypeResolver) Reconcile(context.Context, ctrl.Request) (ctrl.Result, error) {
 	logger := r.log
 	logger.Info("refreshing type resolver")
 	r.Refresh()
