@@ -13,17 +13,6 @@
 # limitations under the License.
 
 - op: add
-  path: /rules/-
-  value:
-    apiGroups:
-    - policy
-    resources:
-    - podsecuritypolicies
-    resourceNames:
-    - acm-psp
-    verbs:
-    - use
-- op: add
   path: /metadata/labels
   value:
     configmanagement.gke.io/system: "true"
