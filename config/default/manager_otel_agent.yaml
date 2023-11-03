@@ -38,7 +38,7 @@ spec:
         - name: OC_RESOURCE_LABELS
           value: 'k8s.container.name="manager"'
       - name: otel-agent
-        image: gcr.io/config-management-release/otelcontribcol:v0.87.0-gke.1
+        image: gcr.io/config-management-release/otelcontribcol:v0.87.0-gke.2
         command:
         - /otelcontribcol
         args:
