@@ -87,27 +87,4 @@ var _ = Describe("Util tests", func() {
 			Expect(c.Status).Should(Equal(v1alpha1.UnknownConditionStatus))
 		})
 	})
-
-	Describe("surface the commit test", func() {
-		It("should return empty when no annotations", func() {
-			commit := getSourceHash(nil)
-			Expect(commit).Should(BeEmpty())
-		})
-		It("should return empty when empty annotations", func() {
-			commit := getSourceHash(map[string]string{})
-			Expect(commit).Should(BeEmpty())
-		})
-		It("should return empty when annotation key doesn't exist", func() {
-			commit := getSourceHash(map[string]string{"foo": "bar"})
-			Expect(commit).Should(BeEmpty())
-		})
-		It("should return commit when annotation key exists", func() {
-			annotations := map[string]string{
-				"foo":                   "bar",
-				SourceHashAnnotationKey: "1234567890",
-			}
-			commit := getSourceHash(annotations)
-			Expect(commit).Should(Equal("1234567890"))
-		})
-	})
 })

@@ -56,7 +56,6 @@ const (
 	ExceedTimeout            = "ExceedTimeout"
 	exceedTimeoutMsg         = "Exceed timeout, the .status.observedGeneration and .status.resourceStatuses fields are old."
 	owningInventoryKey       = "config.k8s.io/owning-inventory"
-	SourceHashAnnotationKey  = "configmanagement.gke.io/token"
 	readinessComponent       = "readiness"
 )
 
@@ -430,13 +429,6 @@ func getInventoryID(labels map[string]string) string {
 		return ""
 	}
 	return labels[common.InventoryLabel]
-}
-
-func getSourceHash(annotations map[string]string) string {
-	if len(annotations) == 0 {
-		return ""
-	}
-	return annotations[SourceHashAnnotationKey]
 }
 
 func ownershipCondition(id, inv string) *v1alpha1.Condition {
