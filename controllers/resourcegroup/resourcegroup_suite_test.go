@@ -16,18 +16,16 @@ package resourcegroup
 
 import (
 	"context"
+	"log"
+	"os"
 	"path/filepath"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
-	"kpt.dev/resourcegroup/controllers/log"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	// +kubebuilder:scaffold:imports
@@ -37,51 +35,41 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var cfg *rest.Config
-var k8sClient client.Client
 var testEnv *envtest.Environment
 
-func TestResourceGroup(t *testing.T) {
-	log.InitFlags()
-	klog.SetOutput(GinkgoWriter)
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "ResourceGroup Suite")
-}
-
-var _ = BeforeSuite(func(done Done) {
-	By("bootstrapping test environment")
+func TestMain(m *testing.M) {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "..", "config", "crd", "bases")},
 	}
 
 	var err error
 	cfg, err = testEnv.Start()
-	Expect(err).ToNot(HaveOccurred())
-	Expect(cfg).ToNot(BeNil())
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	s := scheme.Scheme
-	err = v1alpha1.AddToScheme(s)
-	Expect(err).NotTo(HaveOccurred())
-	err = v1.AddToScheme(s)
-	Expect(err).NotTo(HaveOccurred())
+	if err := v1alpha1.AddToScheme(s); err != nil {
+		log.Fatal(err)
+	}
+	if err := v1.AddToScheme(s); err != nil {
+		log.Fatal(err)
+	}
 
-	// +kubebuilder:scaffold:scheme
+	code := m.Run()
 
-	k8sClient, err = client.New(cfg, client.Options{Scheme: s})
-	Expect(err).ToNot(HaveOccurred())
-	Expect(k8sClient).ToNot(BeNil())
+	err = testEnv.Stop()
+	if err != nil {
+		log.Printf("Error: Failed to stop test env: %v", err)
+	}
 
-	close(done)
-}, 60)
-
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
-})
+	os.Exit(code)
+}
 
 // StartTestManager adds recFn
-func StartTestManager(mgr manager.Manager) {
+func StartTestManager(t *testing.T, mgr manager.Manager) {
 	go func() {
-		Expect(mgr.Start(context.Background())).NotTo(HaveOccurred())
+		err := mgr.Start(context.Background())
+		assert.NoError(t, err)
 	}()
 }

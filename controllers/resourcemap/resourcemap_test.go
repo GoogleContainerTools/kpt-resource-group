@@ -16,15 +16,15 @@ package resourcemap
 
 import (
 	"context"
+	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 )
 
-var _ = Describe("Util tests", func() {
+func TestResourceMapReconcile(t *testing.T) {
 	res1 := resource{
 		Namespace: "ns1",
 		Name:      "res1",
@@ -54,127 +54,148 @@ var _ = Describe("Util tests", func() {
 
 	gk := res1.GK()
 
-	Describe("ResourceMap", func() {
-		It("should reconcile resource group correctly", func() {
-			resourceMap := NewResourceMap()
-			Expect(resourceMap.IsEmpty()).Should(Equal(true))
+	resourceMap := NewResourceMap()
+	assert.True(t, resourceMap.IsEmpty())
 
-			resgroup1 := types.NamespacedName{
-				Namespace: "test-ns",
-				Name:      "group1",
-			}
+	resgroup1 := types.NamespacedName{
+		Namespace: "test-ns",
+		Name:      "group1",
+	}
 
-			resgroup2 := types.NamespacedName{
-				Namespace: "test-ns",
-				Name:      "group2",
-			}
+	resgroup2 := types.NamespacedName{
+		Namespace: "test-ns",
+		Name:      "group2",
+	}
 
-			var gks []schema.GroupKind
+	var gks []schema.GroupKind
 
-			gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{res1, res2}, false)
-			Expect(gks).Should(Equal([]schema.GroupKind{gk}))
-			Expect(len(resourceMap.gkToResources)).Should(Equal(1))
-			Expect(resourceMap.gkToResources[gk].Len()).Should(Equal(2))
-			Expect(resourceMap.gkToResources[gk].Has(res1)).Should(Equal(true))
-			Expect(resourceMap.gkToResources[gk].Has(res2)).Should(Equal(true))
+	gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{res1, res2}, false)
+	assert.Equal(t, []schema.GroupKind{gk}, gks)
+	assert.Len(t, resourceMap.gkToResources, 1)
+	assert.Equal(t, 2, resourceMap.gkToResources[gk].Len())
+	assert.True(t, resourceMap.gkToResources[gk].Has(res1))
+	assert.True(t, resourceMap.gkToResources[gk].Has(res2))
 
-			Expect(resourceMap.IsEmpty()).Should(Equal(false))
-			Expect(resourceMap.HasResource(res1)).Should(Equal(true))
-			Expect(resourceMap.HasResource(res3)).Should(Equal(false))
-			Expect(resourceMap.HasResgroup(resgroup1)).Should(Equal(true))
-			Expect(resourceMap.HasResgroup(resgroup2)).Should(Equal(false))
-			Expect(len(resourceMap.resgroupToResources)).Should(Equal(1))
-			Expect(len(resourceMap.resToResgroups)).Should(Equal(2))
-			Expect(resourceMap.resToResgroups[res1].Len()).Should(Equal(1))
-			Expect(resourceMap.resToResgroups[res2].Len()).Should(Equal(1))
-			Expect(resourceMap.resgroupToResources[resgroup1].Len()).Should(Equal(2))
-			Expect(len(resourceMap.resToStatus)).Should(Equal(0))
+	assert.False(t, resourceMap.IsEmpty())
+	assert.True(t, resourceMap.HasResource(res1))
+	assert.False(t, resourceMap.HasResource(res3))
+	assert.True(t, resourceMap.HasResgroup(resgroup1))
+	assert.False(t, resourceMap.HasResgroup(resgroup2))
+	assert.Len(t, resourceMap.resgroupToResources, 1)
+	assert.Len(t, resourceMap.resToResgroups, 2)
+	assert.Equal(t, 1, resourceMap.resToResgroups[res1].Len())
+	assert.Equal(t, 1, resourceMap.resToResgroups[res2].Len())
+	assert.Equal(t, 2, resourceMap.resgroupToResources[resgroup1].Len())
+	assert.Empty(t, resourceMap.resToStatus)
 
-			resourceMap.SetStatus(res1, &CachedStatus{Status: v1alpha1.Current})
-			resourceMap.SetStatus(res2, &CachedStatus{Status: v1alpha1.InProgress})
+	resourceMap.SetStatus(res1, &CachedStatus{Status: v1alpha1.Current})
+	resourceMap.SetStatus(res2, &CachedStatus{Status: v1alpha1.InProgress})
 
-			gks = resourceMap.Reconcile(context.TODO(), resgroup2, []resource{res1, res3}, false)
-			Expect(len(gks)).Should(Equal(1))
-			Expect(len(resourceMap.gkToResources)).Should(Equal(1))
-			Expect(resourceMap.gkToResources[gk].Len()).Should(Equal(3))
-			Expect(resourceMap.gkToResources[gk].Has(res3)).Should(Equal(true))
-			Expect(len(resourceMap.resToStatus)).Should(Equal(2))
-			cachedStatus := resourceMap.GetStatus(res1)
-			Expect(cachedStatus.Status).Should(Equal(v1alpha1.Current))
-			cachedStatus = resourceMap.GetStatus(res2)
-			Expect(cachedStatus.Status).Should(Equal(v1alpha1.InProgress))
-			cachedStatus = resourceMap.GetStatus(res3)
-			Expect(cachedStatus).Should(BeNil())
+	gks = resourceMap.Reconcile(context.TODO(), resgroup2, []resource{res1, res3}, false)
+	assert.Len(t, gks, 1)
+	assert.Len(t, resourceMap.gkToResources, 1)
+	assert.Equal(t, 3, resourceMap.gkToResources[gk].Len())
+	assert.True(t, resourceMap.gkToResources[gk].Has(res3))
+	assert.Len(t, resourceMap.resToStatus, 2)
+	cachedStatus := resourceMap.GetStatus(res1)
+	assert.Equal(t, v1alpha1.Current, cachedStatus.Status)
+	cachedStatus = resourceMap.GetStatus(res2)
+	assert.Equal(t, v1alpha1.InProgress, cachedStatus.Status)
+	cachedStatus = resourceMap.GetStatus(res3)
+	assert.Nil(t, cachedStatus)
 
-			Expect(resourceMap.HasResource(res3)).Should(Equal(true))
-			Expect(resourceMap.HasResgroup(resgroup2)).Should(Equal(true))
-			Expect(len(resourceMap.resgroupToResources)).Should(Equal(2))
-			Expect(len(resourceMap.resToResgroups)).Should(Equal(3))
-			Expect(resourceMap.resToResgroups[res1].Len()).Should(Equal(2))
-			Expect(resourceMap.resToResgroups[res2].Len()).Should(Equal(1))
-			Expect(resourceMap.resToResgroups[res3].Len()).Should(Equal(1))
+	assert.True(t, resourceMap.HasResource(res3))
+	assert.True(t, resourceMap.HasResgroup(resgroup2))
+	assert.Len(t, resourceMap.resgroupToResources, 2)
+	assert.Len(t, resourceMap.resToResgroups, 3)
+	assert.Equal(t, 2, resourceMap.resToResgroups[res1].Len())
+	assert.Equal(t, 1, resourceMap.resToResgroups[res2].Len())
+	assert.Equal(t, 1, resourceMap.resToResgroups[res3].Len())
 
-			gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{res2}, false)
-			Expect(len(gks)).Should(Equal(1))
-			Expect(len(resourceMap.gkToResources)).Should(Equal(1))
-			Expect(resourceMap.gkToResources[gk].Len()).Should(Equal(3))
+	gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{res2}, false)
+	assert.Len(t, gks, 1)
+	assert.Len(t, resourceMap.gkToResources, 1)
+	assert.Equal(t, 3, resourceMap.gkToResources[gk].Len())
 
-			// res1 is still included in resgroup2
-			Expect(resourceMap.HasResource(res1)).Should(Equal(true))
-			Expect(len(resourceMap.resToResgroups)).Should(Equal(3))
-			Expect(resourceMap.resToResgroups[res1].Len()).Should(Equal(1))
+	// res1 is still included in resgroup2
+	assert.True(t, resourceMap.HasResource(res1))
+	assert.Len(t, resourceMap.resToResgroups, 3)
+	assert.Equal(t, 1, resourceMap.resToResgroups[res1].Len())
 
-			// Set the resource set of resgroup1 to be empty
-			gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{}, false)
-			Expect(len(gks)).Should(Equal(1))
-			Expect(len(resourceMap.gkToResources)).Should(Equal(1))
-			Expect(resourceMap.gkToResources[gk].Len()).Should(Equal(2))
+	// Set the resource set of resgroup1 to be empty
+	gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{}, false)
+	assert.Len(t, gks, 1)
+	assert.Len(t, resourceMap.gkToResources, 1)
+	assert.Equal(t, 2, resourceMap.gkToResources[gk].Len())
 
-			Expect(resourceMap.HasResgroup(resgroup1)).Should(Equal(true))
-			Expect(resourceMap.HasResgroup(resgroup2)).Should(Equal(true))
-			Expect(resourceMap.HasResource(res2)).Should(Equal(false))
-			Expect(len(resourceMap.resgroupToResources)).Should(Equal(2))
-			Expect(len(resourceMap.resToResgroups)).Should(Equal(2))
-			Expect(len(resourceMap.resToStatus)).Should(Equal(1))
+	assert.True(t, resourceMap.HasResgroup(resgroup1))
+	assert.True(t, resourceMap.HasResgroup(resgroup2))
+	assert.False(t, resourceMap.HasResource(res2))
+	assert.Len(t, resourceMap.resgroupToResources, 2)
+	assert.Len(t, resourceMap.resToResgroups, 2)
+	assert.Len(t, resourceMap.resToStatus, 1)
 
-			// Set the resource set of resgroup2 to be empty
-			gks = resourceMap.Reconcile(context.TODO(), resgroup2, []resource{}, false)
-			Expect(len(gks)).Should(Equal(0))
-			Expect(len(resourceMap.gkToResources)).Should(Equal(0))
-			Expect(len(resourceMap.resgroupToResources)).Should(Equal(2))
-			// delete resgroup1
-			gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{}, true)
-			Expect(len(gks)).Should(Equal(0))
+	// Set the resource set of resgroup2 to be empty
+	gks = resourceMap.Reconcile(context.TODO(), resgroup2, []resource{}, false)
+	assert.Empty(t, gks)
+	assert.Empty(t, resourceMap.gkToResources)
+	assert.Len(t, resourceMap.resgroupToResources, 2)
+	// delete resgroup1
+	gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{}, true)
+	assert.Empty(t, gks)
 
-			// delete resgroup2
-			gks = resourceMap.Reconcile(context.TODO(), resgroup2, []resource{}, true)
-			Expect(len(gks)).Should(Equal(0))
-			Expect(resourceMap.IsEmpty()).Should(Equal(true))
-			Expect(len(resourceMap.resToStatus)).Should(Equal(0))
-		})
-	})
+	// delete resgroup2
+	gks = resourceMap.Reconcile(context.TODO(), resgroup2, []resource{}, true)
+	assert.Empty(t, gks)
+	assert.True(t, resourceMap.IsEmpty())
+	assert.Empty(t, resourceMap.resToStatus)
+}
 
-	Describe("diffResources", func() {
-		It("should calculate diff of two resources correctly", func() {
-			toAdd, toDelete := diffResources([]resource{}, []resource{})
-			Expect(len(toAdd)).Should(Equal(0))
-			Expect(len(toDelete)).Should(Equal(0))
+func TestDiffResources(t *testing.T) {
+	res1 := resource{
+		Namespace: "ns1",
+		Name:      "res1",
+		GroupKind: v1alpha1.GroupKind{
+			Group: "group1",
+			Kind:  "service",
+		},
+	}
 
-			toAdd, toDelete = diffResources([]resource{}, []resource{res1})
-			Expect(len(toAdd)).Should(Equal(1))
-			Expect(len(toDelete)).Should(Equal(0))
-			Expect(toAdd[0]).Should(Equal(res1))
+	res2 := resource{
+		Namespace: "ns1",
+		Name:      "res2",
+		GroupKind: v1alpha1.GroupKind{
+			Group: "group1",
+			Kind:  "service",
+		},
+	}
 
-			toAdd, toDelete = diffResources([]resource{res1, res2}, []resource{res1})
-			Expect(len(toAdd)).Should(Equal(0))
-			Expect(len(toDelete)).Should(Equal(1))
-			Expect(toDelete[0]).Should(Equal(res2))
+	res3 := resource{
+		Namespace: "ns1",
+		Name:      "res3",
+		GroupKind: v1alpha1.GroupKind{
+			Group: "group1",
+			Kind:  "service",
+		},
+	}
 
-			toAdd, toDelete = diffResources([]resource{res1, res2}, []resource{res1, res3})
-			Expect(len(toAdd)).Should(Equal(1))
-			Expect(len(toDelete)).Should(Equal(1))
-			Expect(toAdd[0]).Should(Equal(res3))
-			Expect(toDelete[0]).Should(Equal(res2))
-		})
-	})
-})
+	toAdd, toDelete := diffResources([]resource{}, []resource{})
+	assert.Empty(t, toAdd)
+	assert.Empty(t, toDelete)
+
+	toAdd, toDelete = diffResources([]resource{}, []resource{res1})
+	assert.Len(t, toAdd, 1)
+	assert.Empty(t, toDelete)
+	assert.Equal(t, res1, toAdd[0])
+
+	toAdd, toDelete = diffResources([]resource{res1, res2}, []resource{res1})
+	assert.Empty(t, toAdd)
+	assert.Len(t, toDelete, 1)
+	assert.Equal(t, res2, toDelete[0])
+
+	toAdd, toDelete = diffResources([]resource{res1, res2}, []resource{res1, res3})
+	assert.Len(t, toAdd, 1)
+	assert.Len(t, toDelete, 1)
+	assert.Equal(t, res3, toAdd[0])
+	assert.Equal(t, res2, toDelete[0])
+}

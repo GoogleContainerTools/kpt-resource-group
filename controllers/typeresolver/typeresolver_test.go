@@ -15,30 +15,39 @@
 package typeresolver
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-var _ = Describe("resolver tests", func() {
+func TestResolve(t *testing.T) {
 	r := FakeResolver()
-
-	Describe("Resolve GroupKind", func() {
-		It("non existing type return false", func() {
-			_, found := r.Resolve(schema.GroupKind{Group: "not.exist", Kind: "UnFound"})
-			Expect(found).Should(Equal(false))
+	tests := map[string]struct {
+		input         schema.GroupKind
+		expectFound   bool
+		expectVersion string
+	}{
+		"non existing type return false": {
+			input:       schema.GroupKind{Group: "not.exist", Kind: "UnFound"},
+			expectFound: false,
+		},
+		"should have ConfigMap": {
+			input:         schema.GroupKind{Group: "", Kind: "ConfigMap"},
+			expectFound:   true,
+			expectVersion: "v1",
+		},
+		"should have Deployment": {
+			input:         schema.GroupKind{Group: "apps", Kind: "Deployment"},
+			expectFound:   true,
+			expectVersion: "v1",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			gvk, found := r.Resolve(tc.input)
+			assert.Equal(t, tc.expectFound, found)
+			assert.Equal(t, tc.expectVersion, gvk.Version)
 		})
-
-		It("should have ConfigMap", func() {
-			gvk, found := r.Resolve(schema.GroupKind{Group: "", Kind: "ConfigMap"})
-			Expect(found).Should(Equal(true))
-			Expect(gvk.Version).Should(Equal("v1"))
-		})
-
-		It("should have Deployment", func() {
-			gvk, found := r.Resolve(schema.GroupKind{Group: "apps", Kind: "Deployment"})
-			Expect(found).Should(Equal(true))
-			Expect(gvk.Version).Should(Equal("v1"))
-		})
-	})
-})
+	}
+}

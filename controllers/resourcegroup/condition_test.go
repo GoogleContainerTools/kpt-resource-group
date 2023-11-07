@@ -15,12 +15,14 @@
 package resourcegroup
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 )
 
-var _ = Describe("Util tests", func() {
+func TestAdjustConditionOrder(t *testing.T) {
 	reconciling := v1alpha1.Condition{
 		Type: v1alpha1.Reconciling,
 	}
@@ -33,58 +35,84 @@ var _ = Describe("Util tests", func() {
 	testCond2 := v1alpha1.Condition{
 		Type: v1alpha1.ConditionType("world"),
 	}
-	Describe("adjustConditionOrder", func() {
-		It("should order the reconciling and stalled conditions correctly", func() {
-			conds := adjustConditionOrder([]v1alpha1.Condition{stalled, reconciling})
-			Expect(len(conds)).Should(Equal(2))
-			Expect(conds[0].Type).Should(Equal(v1alpha1.Reconciling))
-			Expect(conds[1].Type).Should(Equal(v1alpha1.Stalled))
+	tests := map[string]struct {
+		conditions         []v1alpha1.Condition
+		expectedConditions []v1alpha1.Condition
+	}{
+		"should order the reconciling and stalled conditions correctly": {
+			conditions:         []v1alpha1.Condition{stalled, reconciling},
+			expectedConditions: []v1alpha1.Condition{reconciling, stalled},
+		},
+		"should handle empty condition slice correctly": {
+			conditions: []v1alpha1.Condition{},
+			expectedConditions: []v1alpha1.Condition{
+				{Type: v1alpha1.Reconciling, Status: v1alpha1.UnknownConditionStatus},
+				{Type: v1alpha1.Stalled, Status: v1alpha1.UnknownConditionStatus},
+			},
+		},
+		"should order the remaining conditions correctly": {
+			conditions:         []v1alpha1.Condition{testCond2, stalled, testCond1, reconciling},
+			expectedConditions: []v1alpha1.Condition{reconciling, stalled, testCond1, testCond2},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(fmt.Sprintf("adjustConditionOrder %s", name), func(t *testing.T) {
+			gotConditions := adjustConditionOrder(tc.conditions)
+			assert.Equal(t, len(tc.expectedConditions), len(gotConditions))
+			for i := range gotConditions {
+				assert.Equal(t, tc.expectedConditions[i].Type, gotConditions[i].Type)
+				assert.Equal(t, tc.expectedConditions[i].Status, gotConditions[i].Status)
+			}
 		})
-		It("should handle empty condition slice correctly", func() {
-			conds := adjustConditionOrder([]v1alpha1.Condition{})
-			Expect(len(conds)).Should(Equal(2))
-			Expect(conds[0].Type).Should(Equal(v1alpha1.Reconciling))
-			Expect(conds[0].Status).Should(Equal(v1alpha1.UnknownConditionStatus))
-			Expect(conds[1].Type).Should(Equal(v1alpha1.Stalled))
-			Expect(conds[1].Status).Should(Equal(v1alpha1.UnknownConditionStatus))
-		})
-		It("should order the remaining conditions correctly", func() {
-			conds := adjustConditionOrder([]v1alpha1.Condition{
-				testCond2, stalled, testCond1, reconciling})
-			Expect(len(conds)).Should(Equal(4))
-			Expect(conds[0].Type).Should(Equal(v1alpha1.Reconciling))
-			Expect(conds[1].Type).Should(Equal(v1alpha1.Stalled))
-			Expect(conds[2].Type).Should(Equal(v1alpha1.ConditionType("hello")))
-			Expect(conds[3].Type).Should(Equal(v1alpha1.ConditionType("world")))
-		})
-	})
+	}
+}
 
-	Describe("surfacing ownership test", func() {
-		It("should return nil for empty inventory id and empty owning inventory", func() {
-			id := ""
-			c := ownershipCondition(id, "")
-			Expect(c).Should(BeNil())
+func TestOwnershipCondition(t *testing.T) {
+	tests := map[string]struct {
+		id                string
+		inv               string
+		expectedCondition *v1alpha1.Condition
+	}{
+		"should return nil for empty inventory id and empty owning inventory": {
+			id:                "",
+			inv:               "",
+			expectedCondition: nil,
+		},
+		"should return nil for matched inventory id and owning inventory": {
+			id:                "id",
+			inv:               "id",
+			expectedCondition: nil,
+		},
+		"Should return unmatched message": {
+			id:  "id",
+			inv: "unmatched",
+			expectedCondition: &v1alpha1.Condition{
+				Message: "This resource is owned by another ResourceGroup unmatched. The status only reflects the specification for the current object in ResourceGroup unmatched.",
+				Reason:  v1alpha1.OwnershipUnmatch,
+				Status:  v1alpha1.TrueConditionStatus,
+			},
+		},
+		"Should return not owned message": {
+			id:  "id",
+			inv: "",
+			expectedCondition: &v1alpha1.Condition{
+				Message: "This object is not owned by any inventory object. The status for the current object may not reflect the specification for it in current ResourceGroup.",
+				Reason:  v1alpha1.OwnershipEmpty,
+				Status:  v1alpha1.UnknownConditionStatus,
+			},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(fmt.Sprintf("ownershipCondition %s", name), func(t *testing.T) {
+			c := ownershipCondition(tc.id, tc.inv)
+			if tc.expectedCondition == nil {
+				assert.Nil(t, c)
+			} else {
+				assert.NotNil(t, c)
+				assert.Equal(t, tc.expectedCondition.Message, c.Message)
+				assert.Equal(t, tc.expectedCondition.Reason, c.Reason)
+				assert.Equal(t, tc.expectedCondition.Status, c.Status)
+			}
 		})
-		It("should return nil for matched inventory id and owning inventory", func() {
-			id := "id"
-			c := ownershipCondition(id, "id")
-			Expect(c).Should(BeNil())
-		})
-		It("Should return unmatched message", func() {
-			id := "id"
-			c := ownershipCondition(id, "unmatched")
-			Expect(c).ShouldNot(Equal(nil))
-			Expect(c.Message).Should(ContainSubstring("owned by another"))
-			Expect(c.Reason).Should(Equal(v1alpha1.OwnershipUnmatch))
-			Expect(c.Status).Should(Equal(v1alpha1.TrueConditionStatus))
-		})
-		It("Should return not owned message", func() {
-			id := "id"
-			c := ownershipCondition(id, "")
-			Expect(c).ShouldNot(Equal(nil))
-			Expect(c.Message).Should(ContainSubstring("not owned by any"))
-			Expect(c.Reason).Should(Equal(v1alpha1.OwnershipEmpty))
-			Expect(c.Status).Should(Equal(v1alpha1.UnknownConditionStatus))
-		})
-	})
-})
+	}
+}

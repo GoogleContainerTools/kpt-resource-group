@@ -16,10 +16,10 @@ package root
 
 import (
 	"context"
+	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,172 +38,160 @@ const contextRootControllerKey = contextKey("root-controller")
 var c client.Client
 var ctx context.Context
 
-var _ = Describe("Root Reconciler", func() {
+func TestRootReconciler(t *testing.T) {
 	var reconcilerKpt *Reconciler
 	var namespace = metav1.NamespaceDefault
 
-	BeforeEach(func() {
-		// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-		// channel when it is finished.
-		mgr, err := manager.New(cfg, manager.Options{})
-		Expect(err).NotTo(HaveOccurred())
-		c = mgr.GetClient()
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(cfg, manager.Options{})
+	assert.NoError(t, err)
+	c = mgr.GetClient()
 
-		reconcilerKpt, err = NewReconciler(mgr)
-		Expect(err).ShouldNot(HaveOccurred())
+	reconcilerKpt, err = NewReconciler(mgr)
+	assert.NoError(t, err)
 
-		logger := reconcilerKpt.log.WithValues("Controller", "Root")
-		ctx = context.WithValue(context.TODO(), contextRootControllerKey, logger)
-		resolver, err := typeresolver.NewTypeResolver(mgr, logger)
-		Expect(err).ShouldNot(HaveOccurred())
-		reconcilerKpt.resolver = resolver
+	logger := reconcilerKpt.log.WithValues("Controller", "Root")
+	ctx = context.WithValue(context.TODO(), contextRootControllerKey, logger)
+	resolver, err := typeresolver.NewTypeResolver(mgr, logger)
+	assert.NoError(t, err)
+	reconcilerKpt.resolver = resolver
 
-		StartTestManager(mgr)
-		time.Sleep(10 * time.Second)
-	})
+	StartTestManager(t, mgr)
+	time.Sleep(10 * time.Second)
 
-	AfterEach(func() {
-	})
+	reconcilerKpt.resMap = resourcemap.NewResourceMap()
+	reconcilerKpt.channel = make(chan event.GenericEvent)
 
-	Describe("Root Controller Reconcile", func() {
-		BeforeEach(func() {
-			reconcilerKpt.resMap = resourcemap.NewResourceMap()
-			reconcilerKpt.channel = make(chan event.GenericEvent)
-		})
+	resources := []v1alpha1.ObjMetadata{}
 
-		It("creat, update and delete ResourceGroups in both configsync and kpt groups", func() {
-			resources := []v1alpha1.ObjMetadata{}
+	resourceGroupKpt := &v1alpha1.ResourceGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "group0",
+			Namespace: namespace,
+		},
+		Spec: v1alpha1.ResourceGroupSpec{
+			Resources: resources,
+		},
+	}
 
-			resourceGroupKpt := &v1alpha1.ResourceGroup{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "group0",
-					Namespace: namespace,
-				},
-				Spec: v1alpha1.ResourceGroupSpec{
-					Resources: resources,
-				},
-			}
+	err = c.Create(ctx, resourceGroupKpt)
+	assert.NoError(t, err)
 
-			err := c.Create(ctx, resourceGroupKpt)
-			Expect(err).NotTo(HaveOccurred())
+	// Create triggers an reconciliation,
+	// wait until the reconciliation ends.
+	time.Sleep(time.Second)
+	assert.Equal(t, 0, reconcilerKpt.watches.Len())
+	assert.NotNil(t, reconcilerKpt.resMap)
 
-			// Create triggers an reconciliation,
-			// wait until the reconciliation ends.
-			time.Sleep(time.Second)
-			Expect(reconcilerKpt.watches.Len()).Should(Equal(0))
-			Expect(reconcilerKpt.resMap).ShouldNot(BeNil())
+	// The resmap should be updated correctly
+	request := ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: namespace, Name: "group0"},
+	}
+	assert.True(t, reconcilerKpt.resMap.HasResgroup(request.NamespacedName))
 
-			// The resmap should be updated correctly
-			request := ctrl.Request{
-				NamespacedName: types.NamespacedName{Namespace: namespace, Name: "group0"},
-			}
-			Expect(reconcilerKpt.resMap.HasResgroup(request.NamespacedName)).Should(Equal(true))
+	// There should be one event pushed to the channel.
+	var e event.GenericEvent
+	go func() {
+		e = <-reconcilerKpt.channel
+	}()
+	time.Sleep(time.Second)
+	assert.Equal(t, "group0", e.Object.GetName())
 
-			// There should be one event pushed to the channel.
-			var e event.GenericEvent
-			go func() {
-				e = <-reconcilerKpt.channel
-			}()
-			time.Sleep(time.Second)
-			Expect(e.Object.GetName()).Should(Equal("group0"))
+	// update the Resourcegroup
+	resources = []v1alpha1.ObjMetadata{
+		{
+			Name:      "statefulset",
+			Namespace: namespace,
+			GroupKind: v1alpha1.GroupKind{
+				Group: "apps",
+				Kind:  "StatefulSet",
+			},
+		},
+		{
+			Name:      "deployment",
+			Namespace: namespace,
+			GroupKind: v1alpha1.GroupKind{
+				Group: "apps",
+				Kind:  "Deployment",
+			},
+		},
+		{
+			Name:      "deployment-2",
+			Namespace: namespace,
+			GroupKind: v1alpha1.GroupKind{
+				Group: "apps",
+				Kind:  "Deployment",
+			},
+		},
+		{
+			Name:      "daemonset",
+			Namespace: namespace,
+			GroupKind: v1alpha1.GroupKind{
+				Group: "apps",
+				Kind:  "DaemonSet",
+			},
+		},
+	}
 
-			// update the Resourcegroup
-			resources = []v1alpha1.ObjMetadata{
-				{
-					Name:      "statefulset",
-					Namespace: namespace,
-					GroupKind: v1alpha1.GroupKind{
-						Group: "apps",
-						Kind:  "StatefulSet",
-					},
-				},
-				{
-					Name:      "deployment",
-					Namespace: namespace,
-					GroupKind: v1alpha1.GroupKind{
-						Group: "apps",
-						Kind:  "Deployment",
-					},
-				},
-				{
-					Name:      "deployment-2",
-					Namespace: namespace,
-					GroupKind: v1alpha1.GroupKind{
-						Group: "apps",
-						Kind:  "Deployment",
-					},
-				},
-				{
-					Name:      "daemonset",
-					Namespace: namespace,
-					GroupKind: v1alpha1.GroupKind{
-						Group: "apps",
-						Kind:  "DaemonSet",
-					},
-				},
-			}
+	resourceGroupKpt.Spec = v1alpha1.ResourceGroupSpec{
+		Resources: resources,
+	}
+	// Update the resource group
+	err = c.Update(ctx, resourceGroupKpt)
+	assert.NoError(t, err)
 
-			resourceGroupKpt.Spec = v1alpha1.ResourceGroupSpec{
-				Resources: resources,
-			}
-			// Update the resource group
-			err = c.Update(ctx, resourceGroupKpt)
-			Expect(err).NotTo(HaveOccurred())
+	// The update triggers another reconcile
+	// wait until it ends.
+	time.Sleep(time.Second)
+	assert.Equal(t, 3, reconcilerKpt.watches.Len())
+	assert.NotNil(t, reconcilerKpt.resMap)
 
-			// The update triggers another reconcile
-			// wait until it ends.
-			time.Sleep(time.Second)
-			Expect(reconcilerKpt.watches.Len()).Should(Equal(3))
-			Expect(reconcilerKpt.resMap).ShouldNot(BeNil())
+	// The resmap should be updated correctly
+	assert.True(t, reconcilerKpt.resMap.HasResgroup(request.NamespacedName))
+	for _, resource := range resources {
+		assert.True(t, reconcilerKpt.resMap.HasResource(resource))
+		assert.Equal(t, []types.NamespacedName{request.NamespacedName}, reconcilerKpt.resMap.Get(resource))
+	}
 
-			// The resmap should be updated correctly
-			Expect(reconcilerKpt.resMap.HasResgroup(request.NamespacedName)).Should(Equal(true))
-			for _, resource := range resources {
-				Expect(reconcilerKpt.resMap.HasResource(resource)).Should(Equal(true))
-				Expect(reconcilerKpt.resMap.Get(resource)).Should(Equal([]types.NamespacedName{request.NamespacedName}))
-			}
+	// The watchmap should be updated correctly
+	for _, r := range []*Reconciler{reconcilerKpt} {
+		watched := r.watches.IsWatched(schema.GroupVersionKind{
+			Group: "apps", Version: "v1", Kind: "Deployment"})
+		assert.True(t, watched)
+		watched = r.watches.IsWatched(schema.GroupVersionKind{
+			Group: "apps", Version: "v1", Kind: "StatefulSet"})
+		assert.True(t, watched)
+		watched = r.watches.IsWatched(schema.GroupVersionKind{
+			Group: "apps", Version: "v1", Kind: "DaemonSet"})
+		assert.True(t, watched)
+		assert.Equal(t, 3, r.watches.Len())
+	}
 
-			// The watchmap should be updated correctly
-			for _, r := range []*Reconciler{reconcilerKpt} {
-				watched := r.watches.IsWatched(schema.GroupVersionKind{
-					Group: "apps", Version: "v1", Kind: "Deployment"})
-				Expect(watched).Should(Equal(true))
-				watched = r.watches.IsWatched(schema.GroupVersionKind{
-					Group: "apps", Version: "v1", Kind: "StatefulSet"})
-				Expect(watched).Should(Equal(true))
-				watched = r.watches.IsWatched(schema.GroupVersionKind{
-					Group: "apps", Version: "v1", Kind: "DaemonSet"})
-				Expect(watched).Should(Equal(true))
-				Expect(r.watches.Len()).Should(Equal(3))
-			}
+	// There should be one event pushed to the channel.
+	go func() { e = <-reconcilerKpt.channel }()
+	time.Sleep(time.Second)
+	assert.Equal(t, "group0", e.Object.GetName())
 
-			// There should be one event pushed to the channel.
-			go func() { e = <-reconcilerKpt.channel }()
-			time.Sleep(time.Second)
-			Expect(e.Object.GetName()).Should(Equal("group0"))
+	// Delete the resource group
+	err = c.Delete(ctx, resourceGroupKpt)
+	assert.NoError(t, err)
 
-			// Delete the resource group
-			err = c.Delete(ctx, resourceGroupKpt)
-			Expect(err).NotTo(HaveOccurred())
+	// The delete triggers another reconcile
+	// wait until it ends.
+	time.Sleep(2 * time.Second)
+	assert.NotNil(t, reconcilerKpt.resMap)
 
-			// The delete triggers another reconcile
-			// wait until it ends.
-			time.Sleep(2 * time.Second)
-			Expect(reconcilerKpt.resMap).ShouldNot(BeNil())
+	// The resmap should be updated correctly
+	// It doesn't contain any resourcegroup or resource
+	assert.False(t, reconcilerKpt.resMap.HasResgroup(request.NamespacedName))
+	assert.NotNil(t, reconcilerKpt.resMap)
+	for _, resource := range resources {
+		assert.False(t, reconcilerKpt.resMap.HasResource(resource))
+	}
 
-			// The resmap should be updated correctly
-			// It doesn't contain any resourcegroup or resource
-			Expect(reconcilerKpt.resMap.HasResgroup(request.NamespacedName)).Should(Equal(false))
-			Expect(reconcilerKpt.resMap)
-			for _, resource := range resources {
-				Expect(reconcilerKpt.resMap.HasResource(resource)).Should(Equal(false))
-			}
-
-			// There should be one event pushed to the channel.
-			go func() { e = <-reconcilerKpt.channel }()
-			time.Sleep(time.Second)
-			Expect(e.Object.GetName()).Should(Equal("group0"))
-		})
-	})
-
-})
+	// There should be one event pushed to the channel.
+	go func() { e = <-reconcilerKpt.channel }()
+	time.Sleep(time.Second)
+	assert.Equal(t, "group0", e.Object.GetName())
+}

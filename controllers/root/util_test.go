@@ -15,56 +15,52 @@
 package root
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 )
 
-var _ = Describe("Util tests", func() {
-	Describe("GroupKind to GroupVersionKind", func() {
+func TestGetGroupKinds(t *testing.T) {
+	resources := []v1alpha1.ObjMetadata{
+		{
+			GroupKind: v1alpha1.GroupKind{
+				Group: "",
+				Kind:  "ConfigMap",
+			},
+			Name:      "nm1",
+			Namespace: "ns1",
+		},
+		{
+			GroupKind: v1alpha1.GroupKind{
+				Group: "apps",
+				Kind:  "Deployment",
+			},
+			Name:      "nm2",
+			Namespace: "ns2",
+		},
+		{
+			GroupKind: v1alpha1.GroupKind{
+				Group: "groupname",
+				Kind:  "KindName",
+			},
+			Name:      "nm3",
+			Namespace: "ns3",
+		},
+	}
+	spec := v1alpha1.ResourceGroupSpec{
+		Resources: resources,
+	}
 
-		It("should get groupkind's from spec", func() {
-			resources := []v1alpha1.ObjMetadata{
-				{
-					GroupKind: v1alpha1.GroupKind{
-						Group: "",
-						Kind:  "ConfigMap",
-					},
-					Name:      "nm1",
-					Namespace: "ns1",
-				},
-				{
-					GroupKind: v1alpha1.GroupKind{
-						Group: "apps",
-						Kind:  "Deployment",
-					},
-					Name:      "nm2",
-					Namespace: "ns2",
-				},
-				{
-					GroupKind: v1alpha1.GroupKind{
-						Group: "groupname",
-						Kind:  "KindName",
-					},
-					Name:      "nm3",
-					Namespace: "ns3",
-				},
-			}
-			spec := v1alpha1.ResourceGroupSpec{
-				Resources: resources,
-			}
+	expected := map[schema.GroupKind]struct{}{
+		{Group: "", Kind: "ConfigMap"}:         {},
+		{Group: "apps", Kind: "Deployment"}:    {},
+		{Group: "groupname", Kind: "KindName"}: {},
+	}
 
-			expected := map[schema.GroupKind]struct{}{
-				{Group: "", Kind: "ConfigMap"}:         {},
-				{Group: "apps", Kind: "Deployment"}:    {},
-				{Group: "groupname", Kind: "KindName"}: {},
-			}
-
-			gkSet := getGroupKinds(spec)
-			Expect(gkSet).Should(Equal(expected))
-		})
-	})
-})
+	gkSet := getGroupKinds(spec)
+	assert.Equal(t, expected, gkSet)
+}

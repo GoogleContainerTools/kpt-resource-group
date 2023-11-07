@@ -15,10 +15,10 @@
 package handler
 
 import (
+	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -62,74 +62,70 @@ func (m fakeMapping) GetResources(_ schema.GroupKind) []v1alpha1.ObjMetadata {
 func (m fakeMapping) SetStatus(_ v1alpha1.ObjMetadata, _ *resourcemap.CachedStatus) {
 }
 
-var _ = Describe("Util tests", func() {
-	Describe("EventHandler", func() {
-		It("push events from one event handler", func() {
-			ch := make(chan event.GenericEvent)
-			h := EnqueueEventToChannel{
-				Mapping: fakeMapping{},
-				Channel: ch,
-				Log:     klogr.New(),
-			}
-			u := &unstructured.Unstructured{}
+func TestEventHandler(t *testing.T) {
+	ch := make(chan event.GenericEvent)
+	h := EnqueueEventToChannel{
+		Mapping: fakeMapping{},
+		Channel: ch,
+		Log:     klogr.New(),
+	}
+	u := &unstructured.Unstructured{}
 
-			// Push an event to channel
-			go func() { h.OnAdd(u) }()
+	// Push an event to channel
+	go func() { h.OnAdd(u) }()
 
-			// Consume an event from the channel
-			e := <-ch
-			Expect(e.Object.GetName()).Should(Equal("name1"))
-			Expect(e.Object.GetNamespace()).Should(Equal("namespace1"))
+	// Consume an event from the channel
+	e := <-ch
+	assert.Equal(t, e.Object.GetName(), "name1")
+	assert.Equal(t, e.Object.GetNamespace(), "namespace1")
 
-			// Consume another event from the channel
-			e = <-ch
-			Expect(e.Object.GetName()).Should(Equal("name2"))
-			Expect(e.Object.GetNamespace()).Should(Equal("namespace2"))
-		})
+	// Consume another event from the channel
+	e = <-ch
+	assert.Equal(t, e.Object.GetName(), "name2")
+	assert.Equal(t, e.Object.GetNamespace(), "namespace2")
+}
 
-		It("push events from multiple event handler", func() {
-			ch := make(chan event.GenericEvent)
-			h1 := EnqueueEventToChannel{
-				Mapping: fakeMapping{},
-				Channel: ch,
-				Log:     klogr.New(),
-			}
+func TestEventHandlerMultipleHandlers(t *testing.T) {
+	ch := make(chan event.GenericEvent)
+	h1 := EnqueueEventToChannel{
+		Mapping: fakeMapping{},
+		Channel: ch,
+		Log:     klogr.New(),
+	}
 
-			h2 := EnqueueEventToChannel{
-				Mapping: fakeMapping{},
-				Channel: ch,
-				Log:     klogr.New(),
-				GVK:     schema.GroupVersionKind{Kind: "MyKind"},
-			}
+	h2 := EnqueueEventToChannel{
+		Mapping: fakeMapping{},
+		Channel: ch,
+		Log:     klogr.New(),
+		GVK:     schema.GroupVersionKind{Kind: "MyKind"},
+	}
 
-			u1 := &unstructured.Unstructured{}
-			u2 := &unstructured.Unstructured{}
-			u2.SetGroupVersionKind(schema.GroupVersionKind{Kind: "MyKind"})
-			// Push an event to channel
-			go func() { h1.OnAdd(u1) }()
-			go func() { h2.OnDelete(u2) }()
-			time.Sleep(time.Second)
+	u1 := &unstructured.Unstructured{}
+	u2 := &unstructured.Unstructured{}
+	u2.SetGroupVersionKind(schema.GroupVersionKind{Kind: "MyKind"})
+	// Push an event to channel
+	go func() { h1.OnAdd(u1) }()
+	go func() { h2.OnDelete(u2) }()
+	time.Sleep(time.Second)
 
-			// Consume four events from the channel
-			// These events should be from h1 and h2.
-			// There should be
-			//   1 event for "name1"
-			//   1 event for "my-name"
-			//   2 events for "name2"
-			names := map[string]int{
-				"name1":   0,
-				"name2":   0,
-				"my-name": 0,
-			}
-			for i := 1; i <= 4; i++ {
-				e := <-ch
-				name := e.Object.GetName()
-				names[name]++
-			}
+	// Consume four events from the channel
+	// These events should be from h1 and h2.
+	// There should be
+	//   1 event for "name1"
+	//   1 event for "my-name"
+	//   2 events for "name2"
+	names := map[string]int{
+		"name1":   0,
+		"name2":   0,
+		"my-name": 0,
+	}
+	for i := 1; i <= 4; i++ {
+		e := <-ch
+		name := e.Object.GetName()
+		names[name]++
+	}
 
-			Expect(names["name1"]).Should(Equal(1))
-			Expect(names["name2"]).Should(Equal(2))
-			Expect(names["my-name"]).Should(Equal(1))
-		})
-	})
-})
+	assert.Equal(t, names["name1"], 1)
+	assert.Equal(t, names["name2"], 2)
+	assert.Equal(t, names["my-name"], 1)
+}

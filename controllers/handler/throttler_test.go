@@ -15,10 +15,10 @@
 package handler
 
 import (
+	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -26,120 +26,135 @@ import (
 	"kpt.dev/resourcegroup/apis/kpt.dev/v1alpha1"
 )
 
-var _ = Describe("Unit tests", func() {
-	Describe("Throttler", func() {
-		u := &v1alpha1.ResourceGroup{}
-		u.SetName("group")
-		u.SetNamespace("ns")
+func TestThrottler(t *testing.T) {
+	u := &v1alpha1.ResourceGroup{}
+	u.SetName("group")
+	u.SetNamespace("ns")
 
-		// Push an event to channel
-		genericE := event.GenericEvent{
-			Object: u,
-		}
+	// Push an event to channel
+	genericE := event.GenericEvent{
+		Object: u,
+	}
 
-		u2 := &v1alpha1.ResourceGroup{}
-		u2.SetName("group2")
-		u2.SetNamespace("ns")
+	t.Log("Add one event")
+	throttler := NewThrottler(time.Second)
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
-		genericE2 := event.GenericEvent{
-			Object: u2,
-		}
+	throttler.Generic(genericE, queue)
 
-		It("Add one event", func() {
-			throttler := NewThrottler(time.Second)
-			queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	_, found := throttler.mapping[types.NamespacedName{
+		Name:      "group",
+		Namespace: "ns",
+	}]
+	assert.True(t, found)
+	time.Sleep(2 * time.Second)
+	_, found = throttler.mapping[types.NamespacedName{
+		Name:      "group",
+		Namespace: "ns",
+	}]
+	assert.False(t, found)
 
-			throttler.Generic(genericE, queue)
+	// The queue should contain only one event
+	assert.Equal(t, queue.Len(), 1)
+}
 
-			_, found := throttler.mapping[types.NamespacedName{
-				Name:      "group",
-				Namespace: "ns",
-			}]
-			Expect(found).Should(Equal(true))
-			time.Sleep(2 * time.Second)
-			_, found = throttler.mapping[types.NamespacedName{
-				Name:      "group",
-				Namespace: "ns",
-			}]
-			Expect(found).Should(Equal(false))
+func TestThrottlerMultipleEvents(t *testing.T) {
+	u := &v1alpha1.ResourceGroup{}
+	u.SetName("group")
+	u.SetNamespace("ns")
 
-			// The queue should contain only one event
-			Expect(queue.Len()).Should(Equal(1))
-		})
+	// Push an event to channel
+	genericE := event.GenericEvent{
+		Object: u,
+	}
 
-		It("multiple events for the same object are throttled to one", func() {
-			// Set the duration to 5 seconds
-			throttler := NewThrottler(5 * time.Second)
-			queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	// Set the duration to 5 seconds
+	throttler := NewThrottler(5 * time.Second)
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
-			// Call the event handler three times for the same event
-			throttler.Generic(genericE, queue)
-			throttler.Generic(genericE, queue)
-			throttler.Generic(genericE, queue)
+	// Call the event handler three times for the same event
+	throttler.Generic(genericE, queue)
+	throttler.Generic(genericE, queue)
+	throttler.Generic(genericE, queue)
 
-			// After 3 seconds, still within the duration, the event can
-			// be found in the mapping
-			time.Sleep(3 * time.Second)
-			_, found := throttler.mapping[types.NamespacedName{
-				Name:      "group",
-				Namespace: "ns",
-			}]
-			Expect(found).Should(Equal(true))
+	// After 3 seconds, still within the duration, the event can
+	// be found in the mapping
+	time.Sleep(3 * time.Second)
+	_, found := throttler.mapping[types.NamespacedName{
+		Name:      "group",
+		Namespace: "ns",
+	}]
+	assert.True(t, found)
 
-			// After 3 + 3 seconds, the duration ends, the event
-			// is removed from the mapping
-			time.Sleep(3 * time.Second)
-			_, found = throttler.mapping[types.NamespacedName{
-				Name:      "group",
-				Namespace: "ns",
-			}]
-			Expect(found).Should(Equal(false))
+	// After 3 + 3 seconds, the duration ends, the event
+	// is removed from the mapping
+	time.Sleep(3 * time.Second)
+	_, found = throttler.mapping[types.NamespacedName{
+		Name:      "group",
+		Namespace: "ns",
+	}]
+	assert.False(t, found)
 
-			// The queue should contain only one event
-			Expect(queue.Len()).Should(Equal(1))
-		})
+	// The queue should contain only one event
+	assert.Equal(t, queue.Len(), 1)
+}
 
-		It("events for multiple objects are kept", func() {
-			// Set the duration to 5 seconds
-			throttler := NewThrottler(5 * time.Second)
-			queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+func TestThrottlerMultipleObjects(t *testing.T) {
+	u := &v1alpha1.ResourceGroup{}
+	u.SetName("group")
+	u.SetNamespace("ns")
 
-			// Call the event handler to push two events
-			throttler.Generic(genericE, queue)
-			throttler.Generic(genericE2, queue)
-			throttler.Generic(genericE, queue)
-			throttler.Generic(genericE2, queue)
+	// Push an event to channel
+	genericE := event.GenericEvent{
+		Object: u,
+	}
 
-			// After 3 seconds, still within the duration, the events can
-			// be found in the mapping
-			time.Sleep(3 * time.Second)
-			_, found := throttler.mapping[types.NamespacedName{
-				Name:      "group",
-				Namespace: "ns",
-			}]
-			Expect(found).Should(Equal(true))
-			_, found = throttler.mapping[types.NamespacedName{
-				Name:      "group2",
-				Namespace: "ns",
-			}]
-			Expect(found).Should(Equal(true))
+	u2 := &v1alpha1.ResourceGroup{}
+	u2.SetName("group2")
+	u2.SetNamespace("ns")
 
-			// After 3 + 3 seconds, the duration ends, the events
-			// is removed from the mapping
-			time.Sleep(3 * time.Second)
-			_, found = throttler.mapping[types.NamespacedName{
-				Name:      "group",
-				Namespace: "ns",
-			}]
-			Expect(found).Should(Equal(false))
-			_, found = throttler.mapping[types.NamespacedName{
-				Name:      "group2",
-				Namespace: "ns",
-			}]
-			Expect(found).Should(Equal(false))
+	genericE2 := event.GenericEvent{
+		Object: u2,
+	}
 
-			// The queue should contain two events
-			Expect(queue.Len()).Should(Equal(2))
-		})
-	})
-})
+	// Set the duration to 5 seconds
+	throttler := NewThrottler(5 * time.Second)
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+
+	// Call the event handler to push two events
+	throttler.Generic(genericE, queue)
+	throttler.Generic(genericE2, queue)
+	throttler.Generic(genericE, queue)
+	throttler.Generic(genericE2, queue)
+
+	// After 3 seconds, still within the duration, the events can
+	// be found in the mapping
+	time.Sleep(3 * time.Second)
+	_, found := throttler.mapping[types.NamespacedName{
+		Name:      "group",
+		Namespace: "ns",
+	}]
+	assert.True(t, found)
+	_, found = throttler.mapping[types.NamespacedName{
+		Name:      "group2",
+		Namespace: "ns",
+	}]
+	assert.True(t, found)
+
+	// After 3 + 3 seconds, the duration ends, the events
+	// is removed from the mapping
+	time.Sleep(3 * time.Second)
+	_, found = throttler.mapping[types.NamespacedName{
+		Name:      "group",
+		Namespace: "ns",
+	}]
+	assert.False(t, found)
+	_, found = throttler.mapping[types.NamespacedName{
+		Name:      "group2",
+		Namespace: "ns",
+	}]
+	assert.False(t, found)
+
+	// The queue should contain two events
+	assert.Equal(t, queue.Len(), 2)
+}
