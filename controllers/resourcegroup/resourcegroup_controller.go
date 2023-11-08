@@ -46,6 +46,7 @@ import (
 	"kpt.dev/resourcegroup/controllers/typeresolver"
 )
 
+//nolint:revive // TODO: add comments for public constants and enable linting
 const (
 	StartReconciling         = "StartReconciling"
 	startReconcilingMsg      = "start reconciling"
@@ -65,6 +66,7 @@ type contextKey string
 
 const contextLoggerKey = contextKey("logger")
 
+// DefaultDuration is the default throttling duration
 var DefaultDuration = 30 * time.Second
 
 // reconciler reconciles a ResourceGroup object
@@ -399,6 +401,8 @@ func aggregateResourceStatuses(statuses []v1alpha1.ResourceStatus) v1alpha1.Cond
 	return newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg)
 }
 
+// NewRGController creates a new ResourceGroup controller and registers it with
+// the provided manager.
 func NewRGController(mgr ctrl.Manager, channel chan event.GenericEvent, logger logr.Logger,
 	resolver *typeresolver.TypeResolver, resMap *resourcemap.ResourceMap, duration time.Duration) error {
 	r := &reconciler{

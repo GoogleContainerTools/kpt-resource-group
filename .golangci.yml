@@ -6,33 +6,11 @@ linters:
   # inverted configuration with `enable-all` and `disable` is not scalable during updates of golangci-lint
   disable-all: true
   enable:
-    - bodyclose
-    - dogsled
-    - dupl
-    - errcheck
-    - exportloopref
-    - gochecknoinits
-    - goconst
-    - gocritic
-    - gocyclo
-    - gofmt
-    - goimports
-    - gosec
-    - gosimple
-    - govet
-    - ineffassign
-    # - interfacer
-    - lll
-    - misspell
-    - nakedret
-    - staticcheck
-    - stylecheck
-    - revive
-    - typecheck
-    - unconvert
-    - unparam
-    - unused
-    - whitespace
+  - gofmt
+  - goimports
+  - revive
+  - staticcheck
+  - unconvert
 
 
 linters-settings:
@@ -56,3 +34,15 @@ issues:
         - revive
       # ginkgo and gomega conventionally use dot imports in tests for their DSL
       text: dot-imports
+      # apis do not follow linter because comments are mapped into CRD
+    - path: 'apis/(.+)'
+      linters:
+      - revive
+    - linters:
+      - revive
+      # TODO: Add package comments and remove this exception
+      text: "should have a package comment"
+    - linters:
+      - revive
+      # Config Sync uses errors for human-readable status messages.
+      text: "error strings should not be capitalized"

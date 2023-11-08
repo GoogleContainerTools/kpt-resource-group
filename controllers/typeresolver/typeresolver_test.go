@@ -22,7 +22,7 @@ import (
 )
 
 func TestResolve(t *testing.T) {
-	r := FakeResolver()
+	r := fakeResolver()
 	tests := map[string]struct {
 		input         schema.GroupKind
 		expectFound   bool

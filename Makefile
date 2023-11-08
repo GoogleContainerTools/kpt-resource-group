@@ -99,7 +99,7 @@ lint: lint-go lint-license-headers
 .PHONY: lint-go
 # Lint the Go code
 lint-go: "$(GOLINT)"
-	"$(GOLINT)" run ./...
+	"$(GOLINT)" run --exclude-use-default=false
 
 .PHONY: tidy
 tidy:
